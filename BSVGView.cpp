@@ -91,9 +91,6 @@ BSVGView::Draw(BRect updateRect)
 
     PushState();
 
-    SetOrigin(BPoint(fOffsetX, fOffsetY));
-    SetScale(fScale);
-
     for (NSVGshape* shape = fSVGImage->shapes; shape != NULL; shape = shape->next) {
         if (shape->flags & NSVG_FLAGS_VISIBLE) {
             _DrawShape(shape);
@@ -258,15 +255,19 @@ BSVGView::_ConvertPath(NSVGpath* path, BShape& shape)
     if (!path || path->npts < 2)
         return;
 
-    BPoint startPoint(path->pts[0], path->pts[1]);
+    BPoint startPoint(path->pts[0] * fScale + fOffsetX,
+                     path->pts[1] * fScale + fOffsetY);
     shape.MoveTo(startPoint);
 
-    for (int i = 0; i < path->npts - 1; i += 3) {
-        if (i + 3 < path->npts) {
-            BPoint control1(path->pts[i*2 + 2], path->pts[i*2 + 3]);
-            BPoint control2(path->pts[i*2 + 4], path->pts[i*2 + 5]);
-            BPoint endPoint(path->pts[i*2 + 6], path->pts[i*2 + 7]);
-            
+    for (int i = 1; i < path->npts; i += 3) {
+        if (i + 2 < path->npts) {
+            BPoint control1(path->pts[i*2] * fScale + fOffsetX,
+                           path->pts[i*2 + 1] * fScale + fOffsetY);
+            BPoint control2(path->pts[(i+1)*2] * fScale + fOffsetX,
+                           path->pts[(i+1)*2 + 1] * fScale + fOffsetY);
+            BPoint endPoint(path->pts[(i+2)*2] * fScale + fOffsetX,
+                           path->pts[(i+2)*2 + 1] * fScale + fOffsetY);
+
             shape.BezierTo(control1, control2, endPoint);
         }
     }
@@ -331,6 +332,11 @@ BSVGView::_SetupGradient(NSVGgradient* gradient, BRect bounds, char gradientType
 
     BGradient* bgradient = NULL;
 
+    BRect scaledBounds(bounds.left * fScale + fOffsetX,
+                      bounds.top * fScale + fOffsetY,
+                      bounds.right * fScale + fOffsetX,
+                      bounds.bottom * fScale + fOffsetY);
+
     if (gradientType == NSVG_PAINT_LINEAR_GRADIENT) {
         float x1 = 0.0f, y1 = 0.0f, x2 = 1.0f, y2 = 0.0f;
 
@@ -345,17 +351,17 @@ BSVGView::_SetupGradient(NSVGgradient* gradient, BRect bounds, char gradientType
             dx /= len;
             dy /= len;
 
-            float size = (bounds.Width() + bounds.Height()) / 2.0f;
+            float size = (scaledBounds.Width() + scaledBounds.Height()) / 2.0f;
 
-            BPoint start(bounds.left + bounds.Width() * 0.5f - dx * size * 0.5f,
-                        bounds.top + bounds.Height() * 0.5f - dy * size * 0.5f);
-            BPoint end(bounds.left + bounds.Width() * 0.5f + dx * size * 0.5f,
-                      bounds.top + bounds.Height() * 0.5f + dy * size * 0.5f);
+            BPoint start(scaledBounds.left + scaledBounds.Width() * 0.5f - dx * size * 0.5f,
+                        scaledBounds.top + scaledBounds.Height() * 0.5f - dy * size * 0.5f);
+            BPoint end(scaledBounds.left + scaledBounds.Width() * 0.5f + dx * size * 0.5f,
+                      scaledBounds.top + scaledBounds.Height() * 0.5f + dy * size * 0.5f);
 
             bgradient = new BGradientLinear(start, end);
         } else {
-            BPoint start(bounds.left, bounds.top);
-            BPoint end(bounds.right, bounds.top);
+            BPoint start(scaledBounds.left, scaledBounds.top);
+            BPoint end(scaledBounds.right, scaledBounds.top);
             bgradient = new BGradientLinear(start, end);
         }
     } else if (gradientType == NSVG_PAINT_RADIAL_GRADIENT) {
@@ -364,10 +370,10 @@ BSVGView::_SetupGradient(NSVGgradient* gradient, BRect bounds, char gradientType
         _TransformGradientCoords(&cx, &cy, gradient->xform);
 
         float scale = _GetGradientScale(gradient->xform);
-        float radius = (bounds.Width() + bounds.Height()) / 4.0f * scale;
+        float radius = (scaledBounds.Width() + scaledBounds.Height()) / 4.0f * scale;
 
-        BPoint center(bounds.left + bounds.Width() * cx, 
-                     bounds.top + bounds.Height() * cy);
+        BPoint center(scaledBounds.left + scaledBounds.Width() * cx,
+                     scaledBounds.top + scaledBounds.Height() * cy);
 
         bgradient = new BGradientRadial(center, radius);
     }
@@ -375,7 +381,7 @@ BSVGView::_SetupGradient(NSVGgradient* gradient, BRect bounds, char gradientType
     if (bgradient) {
         for (int i = 0; i < gradient->nstops; i++) {
             NSVGgradientStop* stop = &gradient->stops[i];
-            rgb_color color = _ConvertColor(stop->color);
+            rgb_color color = _ConvertColor(stop->color, 1.0f);
 
             float offset = stop->offset * 255.0f;
             if (offset < 0) offset = 0;
@@ -407,7 +413,7 @@ BSVGView::_ConvertColor(unsigned int color, float opacity)
 void
 BSVGView::_SetupStrokeStyle(NSVGshape* shape)
 {
-    SetPenSize(shape->strokeWidth);
+    SetPenSize(shape->strokeWidth * fScale);
 
     cap_mode capMode = B_BUTT_CAP;
     join_mode joinMode = B_MITER_JOIN;
@@ -436,7 +442,7 @@ BSVGView::_SetupStrokeStyle(NSVGshape* shape)
             break;
     }
 
-    SetLineMode(capMode, joinMode, shape->miterLimit);
+    SetLineMode(capMode, joinMode, shape->miterLimit * fScale);
 }
 
 void
