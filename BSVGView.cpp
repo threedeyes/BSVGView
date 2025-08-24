@@ -334,50 +334,45 @@ BSVGView::_SetupGradient(NSVGgradient* gradient, BRect bounds, char gradientType
 
     BGradient* bgradient = NULL;
 
-    BRect scaledBounds(bounds.left * fScale + fOffsetX,
-                      bounds.top * fScale + fOffsetY,
-                      bounds.right * fScale + fOffsetX,
-                      bounds.bottom * fScale + fOffsetY);
+    float inv[6], xform[6];
+    memcpy(inv, gradient->xform, sizeof(float) * 6);
+
+    double det = (double)inv[0] * inv[3] - (double)inv[2] * inv[1];
+    if (fabs(det) < 1e-6) {
+        *outGradient = NULL;
+        return;
+    }
+
+    double invdet = 1.0 / det;
+    xform[0] = (float)(inv[3] * invdet);
+    xform[1] = (float)(-inv[1] * invdet);
+    xform[2] = (float)(-inv[2] * invdet);
+    xform[3] = (float)(inv[0] * invdet);
+    xform[4] = (float)(((double)inv[2] * inv[5] - (double)inv[3] * inv[4]) * invdet);
+    xform[5] = (float)(((double)inv[1] * inv[4] - (double)inv[0] * inv[5]) * invdet);
 
     if (gradientType == NSVG_PAINT_LINEAR_GRADIENT) {
-        float x1 = 0.0f, y1 = 0.0f, x2 = 1.0f, y2 = 0.0f;
+        float x1 = xform[4];
+        float y1 = xform[5];
 
-        _TransformGradientCoords(&x1, &y1, gradient->xform);
-        _TransformGradientCoords(&x2, &y2, gradient->xform);
+        float dx = xform[2];
+        float dy = xform[3];
 
-        float dx = x2 - x1;
-        float dy = y2 - y1;
-        float len = sqrtf(dx*dx + dy*dy);
+        float x2 = x1 + dx;
+        float y2 = y1 + dy;
 
-        if (len > 0.001f) {
-            dx /= len;
-            dy /= len;
+        x1 = x1 * fScale + fOffsetX;
+        y1 = y1 * fScale + fOffsetY;
+        x2 = x2 * fScale + fOffsetX;
+        y2 = y2 * fScale + fOffsetY;
 
-            float size = (scaledBounds.Width() + scaledBounds.Height()) / 2.0f;
-
-            BPoint start(scaledBounds.left + scaledBounds.Width() * 0.5f - dx * size * 0.5f,
-                        scaledBounds.top + scaledBounds.Height() * 0.5f - dy * size * 0.5f);
-            BPoint end(scaledBounds.left + scaledBounds.Width() * 0.5f + dx * size * 0.5f,
-                      scaledBounds.top + scaledBounds.Height() * 0.5f + dy * size * 0.5f);
-
-            bgradient = new BGradientLinear(start, end);
-        } else {
-            BPoint start(scaledBounds.left, scaledBounds.top);
-            BPoint end(scaledBounds.right, scaledBounds.top);
-            bgradient = new BGradientLinear(start, end);
-        }
+        bgradient = new BGradientLinear(BPoint(x1, y1), BPoint(x2, y2));
     } else if (gradientType == NSVG_PAINT_RADIAL_GRADIENT) {
-        float cx = 0.5f, cy = 0.5f;
+        float cx = xform[4] * fScale + fOffsetX;
+        float cy = xform[5] * fScale + fOffsetY;
+        float radius = sqrtf(xform[0] * xform[0] + xform[3] * xform[3]) * fScale;
 
-        _TransformGradientCoords(&cx, &cy, gradient->xform);
-
-        float scale = _GetGradientScale(gradient->xform);
-        float radius = (scaledBounds.Width() + scaledBounds.Height()) / 4.0f * scale;
-
-        BPoint center(scaledBounds.left + scaledBounds.Width() * cx,
-                     scaledBounds.top + scaledBounds.Height() * cy);
-
-        bgradient = new BGradientRadial(center, radius);
+        bgradient = new BGradientRadial(BPoint(cx, cy), radius);
     }
 
     if (bgradient) {
