@@ -212,6 +212,8 @@ BSVGView::_DrawShape(NSVGshape* shape)
 
     BShape bShape;
 
+    SetDrawingMode(B_OP_ALPHA);
+
     for (NSVGpath* path = shape->paths; path != NULL; path = path->next) {
         _ConvertPath(path, bShape);
     }
@@ -403,7 +405,10 @@ BSVGView::_ConvertColor(unsigned int color, float opacity)
     result.blue = (color >> 16) & 0xFF;
 
     uint8 alpha = (color >> 24) & 0xFF;
-    if (alpha == 0) alpha = 255;
+
+    if (alpha == 0 && ((color >> 24) == 0)) {
+        alpha = 255;
+    }
 
     result.alpha = (uint8)(alpha * opacity);
 
