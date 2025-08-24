@@ -3,14 +3,14 @@
  * Distributed under the terms of the MIT License.
  */
 
+#define NANOSVG_IMPLEMENTATION
+
 #include "BSVGView.h"
+
 #include <stdio.h>
 #include <math.h>
 #include <GradientLinear.h>
 #include <GradientRadial.h>
-
-#define NANOSVG_IMPLEMENTATION
-#include "nanosvg.h"
 
 BSVGView::BSVGView(BRect frame, const char* name, uint32 resizeMask, uint32 flags)
     : BView(frame, name, resizeMask, flags),
@@ -469,9 +469,6 @@ BSVGView::_CalculateAutoScale()
     float scaleY = availableHeight / fSVGImage->height;
 
     fScale = (scaleX < scaleY) ? scaleX : scaleY;
-
-    if (fScale > 10.0f) fScale = 10.0f;
-    if (fScale < 0.01f) fScale = 0.01f;
 
     float scaledWidth = fSVGImage->width * fScale;
     float scaledHeight = fSVGImage->height * fScale;
