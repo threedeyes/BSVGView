@@ -32,15 +32,18 @@ public:
     virtual void FrameResized(float newWidth, float newHeight);
 
     void SetScale(float scale);
-    void SetOffset(float x, float y);
+    void SetOffset(BPoint point);
     void SetAutoScale(bool enable);
     void FitToWindow();
     void CenterImage();
     void ActualSize();
 
-    BRect GetSVGBounds() const;
-    float GetSVGWidth() const;
-    float GetSVGHeight() const;
+    BRect SVGBounds() const {  return fSVGImage ? BRect() : BRect(0, 0, fSVGImage->width - 1, fSVGImage->height - 1); }
+    float SVGWidth() const { return fSVGImage ? fSVGImage->width : 0.0f; }
+    float SVGHeight() const { return fSVGImage ? fSVGImage->height : 0.0f; }
+    float Scale() const { return fScale; }
+    BPoint Offset() const { return BPoint(fOffsetX, fOffsetY); }
+
     bool  IsLoaded() const { return fSVGImage != NULL; }
 
 private:

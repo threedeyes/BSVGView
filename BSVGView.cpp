@@ -142,10 +142,10 @@ BSVGView::SetScale(float scale)
 }
 
 void
-BSVGView::SetOffset(float x, float y)
+BSVGView::SetOffset(BPoint point)
 {
-    fOffsetX = x;
-    fOffsetY = y;
+    fOffsetX = point.x;
+    fOffsetY = point.y;
     Invalidate();
 }
 
@@ -193,27 +193,6 @@ BSVGView::ActualSize()
         fScale = 1.0f;
         CenterImage();
     }
-}
-
-BRect
-BSVGView::GetSVGBounds() const
-{
-    if (!fSVGImage)
-        return BRect();
-        
-    return BRect(0, 0, fSVGImage->width - 1, fSVGImage->height - 1);
-}
-
-float
-BSVGView::GetSVGWidth() const
-{
-    return fSVGImage ? fSVGImage->width : 0.0f;
-}
-
-float
-BSVGView::GetSVGHeight() const
-{
-    return fSVGImage ? fSVGImage->height : 0.0f;
 }
 
 void
