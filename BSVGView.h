@@ -52,8 +52,6 @@ private:
     rgb_color _ConvertColor(unsigned int color, float opacity = 1.0f);
     void _CalculateAutoScale();
     void _SetupStrokeStyle(NSVGshape* shape);
-    void _TransformGradientCoords(float* x, float* y, float* xform);
-    float _GetGradientScale(float* xform);
 
 private:
     NSVGimage* fSVGImage;

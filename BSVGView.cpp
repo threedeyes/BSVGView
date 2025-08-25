@@ -20,7 +20,7 @@ BSVGView::BSVGView(BRect frame, const char* name, uint32 resizeMask, uint32 flag
       fOffsetY(0.0f),
       fAutoScale(true)
 {
-//    SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
+    SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
 }
 
 BSVGView::~BSVGView()
@@ -90,6 +90,18 @@ BSVGView::Draw(BRect updateRect)
         return;
 
     PushState();
+
+	float cellSize = 24.0;
+	for (int x = 0; x < Bounds().Width() / cellSize; x++) {
+		for (int y = 0; y < Bounds().Height() / cellSize; y++) {
+			if ((x + y) % 2)
+				SetHighColor(150,150,150);
+			else
+				SetHighColor(100,100,100);
+
+			FillRect(BRect(x * cellSize, y * cellSize, (x + 1) * cellSize, (y + 1) * cellSize));
+		}
+	}
 
     for (NSVGshape* shape = fSVGImage->shapes; shape != NULL; shape = shape->next) {
         if (shape->flags & NSVG_FLAGS_VISIBLE) {
@@ -475,29 +487,4 @@ BSVGView::_CalculateAutoScale()
 
     fOffsetX = (bounds.Width() - scaledWidth) / 2.0f;
     fOffsetY = (bounds.Height() - scaledHeight) / 2.0f;
-}
-
-void
-BSVGView::_TransformGradientCoords(float* x, float* y, float* xform)
-{
-    if (!x || !y || !xform)
-        return;
-
-    float tx = *x * xform[0] + *y * xform[2] + xform[4];
-    float ty = *x * xform[1] + *y * xform[3] + xform[5];
-
-    *x = tx;
-    *y = ty;
-}
-
-float
-BSVGView::_GetGradientScale(float* xform)
-{
-    if (!xform)
-        return 1.0f;
-
-    float sx = sqrtf(xform[0] * xform[0] + xform[1] * xform[1]);
-    float sy = sqrtf(xform[2] * xform[2] + xform[3] * xform[3]);
-
-    return (sx + sy) / 2.0f;
 }
