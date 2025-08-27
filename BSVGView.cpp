@@ -18,9 +18,22 @@ BSVGView::BSVGView(BRect frame, const char* name, uint32 resizeMask, uint32 flag
 	fScale(1.0f),
 	fOffsetX(0.0f),
 	fOffsetY(0.0f),
-	fAutoScale(true)
+	fAutoScale(true),
+	fDisplayMode(SVG_DISPLAY_NORMAL),
+	fShowTransparency(true)
 {
-	SetViewColor(ui_color(B_PANEL_BACKGROUND_COLOR));
+}
+
+BSVGView::BSVGView(const char* name)
+	: BView(name, B_WILL_DRAW | B_FRAME_EVENTS),
+	fSVGImage(NULL),
+	fScale(1.0f),
+	fOffsetX(0.0f),
+	fOffsetY(0.0f),
+	fAutoScale(true),
+	fDisplayMode(SVG_DISPLAY_NORMAL),
+	fShowTransparency(true)
+{
 }
 
 BSVGView::~BSVGView()
@@ -91,17 +104,10 @@ BSVGView::Draw(BRect updateRect)
 
 	PushState();
 
-	float cellSize = 24.0;
-	for (int x = 0; x < Bounds().Width() / cellSize; x++) {
-		for (int y = 0; y < Bounds().Height() / cellSize; y++) {
-			if ((x + y) % 2)
-				SetHighColor(150,150,150);
-			else
-				SetHighColor(100,100,100);
-
-			FillRect(BRect(x * cellSize, y * cellSize, (x + 1) * cellSize, (y + 1) * cellSize));
-		}
-	}
+	BRegion region(Bounds());
+	ConstrainClippingRegion(&region);
+	if (fShowTransparency)
+		_DrawTransparencyGrid();
 
 	for (NSVGshape* shape = fSVGImage->shapes; shape != NULL; shape = shape->next) {
 		if (shape->flags & NSVG_FLAGS_VISIBLE) {
@@ -115,8 +121,6 @@ BSVGView::Draw(BRect updateRect)
 void
 BSVGView::AttachedToWindow()
 {
-	BView::AttachedToWindow();
-
 	if (fAutoScale && fSVGImage)
 		_CalculateAutoScale();
 }
@@ -124,8 +128,6 @@ BSVGView::AttachedToWindow()
 void
 BSVGView::FrameResized(float newWidth, float newHeight)
 {
-	BView::FrameResized(newWidth, newHeight);
-
 	if (fAutoScale && fSVGImage) {
 		_CalculateAutoScale();
 		Invalidate();
@@ -196,6 +198,30 @@ BSVGView::ActualSize()
 }
 
 void
+BSVGView::SetDisplayMode(svg_display_mode mode)
+{
+	if (fDisplayMode != mode) {
+		fDisplayMode = mode;
+		Invalidate();
+	}
+}
+
+void
+BSVGView::SetShowTransparency(bool show)
+{
+	if (fShowTransparency != show) {
+		fShowTransparency = show;
+		Invalidate();
+	}
+}
+
+BRect
+BSVGView::SVGBounds() const
+{
+	return fSVGImage ? BRect(0, 0, fSVGImage->width - 1, fSVGImage->height - 1) : BRect();
+}
+
+void
 BSVGView::_DrawShape(NSVGshape* shape)
 {
 	if (!shape)
@@ -209,7 +235,18 @@ BSVGView::_DrawShape(NSVGshape* shape)
 		_ConvertPath(path, bShape);
 	}
 
-	if (shape->fill.type != NSVG_PAINT_NONE) {
+	bool drawFill = (fDisplayMode == SVG_DISPLAY_NORMAL || fDisplayMode == SVG_DISPLAY_FILL_ONLY);
+	bool drawStroke = (fDisplayMode == SVG_DISPLAY_NORMAL || fDisplayMode == SVG_DISPLAY_STROKE_ONLY);
+	bool drawOutline = (fDisplayMode == SVG_DISPLAY_OUTLINE);
+
+	if (drawOutline) {
+		SetHighColor(0, 0, 0);
+		SetPenSize(1.0f);
+		StrokeShape(&bShape);
+		return;
+	}
+
+	if (drawFill && shape->fill.type != NSVG_PAINT_NONE) {
 		_ApplyFillPaint(&shape->fill, shape->opacity);
 
 		if (shape->fill.type == NSVG_PAINT_LINEAR_GRADIENT ||
@@ -227,7 +264,7 @@ BSVGView::_DrawShape(NSVGshape* shape)
 		}
 	}
 
-	if (shape->stroke.type != NSVG_PAINT_NONE && shape->strokeWidth > 0.0f) {
+	if (drawStroke && shape->stroke.type != NSVG_PAINT_NONE && shape->strokeWidth > 0.0f) {
 		_ApplyStrokePaint(&shape->stroke, shape->opacity);
 		_SetupStrokeStyle(shape);
 
@@ -466,4 +503,22 @@ BSVGView::_CalculateAutoScale()
 
 	fOffsetX = (bounds.Width() - scaledWidth) / 2.0f;
 	fOffsetY = (bounds.Height() - scaledHeight) / 2.0f;
+}
+
+void
+BSVGView::_DrawTransparencyGrid()
+{
+	float cellSize = 24.0;
+	BRect bounds = Bounds();
+
+	for (int x = 0; x < bounds.Width() / cellSize; x++) {
+		for (int y = 0; y < bounds.Height() / cellSize; y++) {
+			if ((x + y) % 2)
+				SetHighColor(230, 230, 230);
+			else
+				SetHighColor(200, 200, 200);
+
+			FillRect(BRect(x * cellSize, y * cellSize, (x + 1) * cellSize, (y + 1) * cellSize));
+		}
+	}
 }

@@ -3,12 +3,13 @@
  * Distributed under the terms of the MIT License.
  */
 
-#ifndef BSVGVIEW_H
-#define BSVGVIEW_H
+#ifndef B_SVGVIEW_H
+#define B_SVGVIEW_H
 
 #include <View.h>
 #include <Shape.h>
 #include <Rect.h>
+#include <Region.h>
 #include <String.h>
 #include <Gradient.h>
 #include <GradientLinear.h>
@@ -16,11 +17,19 @@
 
 #include "nanosvg.h"
 
+enum svg_display_mode {
+	SVG_DISPLAY_NORMAL = 0,
+	SVG_DISPLAY_OUTLINE,
+	SVG_DISPLAY_FILL_ONLY,
+	SVG_DISPLAY_STROKE_ONLY
+};
+
 class BSVGView : public BView {
 public:
 	BSVGView(BRect frame, const char* name,
 			uint32 resizeMask = B_FOLLOW_ALL_SIDES,
 			uint32 flags = B_WILL_DRAW | B_FRAME_EVENTS);
+	BSVGView(const char* name = "svg_view");
 	virtual ~BSVGView();
 
 	status_t LoadFromFile(const char* filename, const char* units = "px", float dpi = 96.0f);
@@ -38,7 +47,13 @@ public:
 	void CenterImage();
 	void ActualSize();
 
-	BRect SVGBounds() const {  return fSVGImage ? BRect() : BRect(0, 0, fSVGImage->width - 1, fSVGImage->height - 1); }
+	void SetDisplayMode(svg_display_mode mode);
+	svg_display_mode DisplayMode() const { return fDisplayMode; }
+
+	void SetShowTransparency(bool show);
+	bool ShowTransparency() const { return fShowTransparency; }
+
+	BRect SVGBounds() const;
 	float SVGWidth() const { return fSVGImage ? fSVGImage->width : 0.0f; }
 	float SVGHeight() const { return fSVGImage ? fSVGImage->height : 0.0f; }
 	float Scale() const { return fScale; }
@@ -46,7 +61,7 @@ public:
 
 	bool  IsLoaded() const { return fSVGImage != NULL; }
 
-private:
+protected:
 	void _DrawShape(NSVGshape* shape);
 	void _ConvertPath(NSVGpath* path, BShape& shape);
 	void _ApplyFillPaint(NSVGpaint* paint, float opacity);
@@ -55,14 +70,17 @@ private:
 	rgb_color _ConvertColor(unsigned int color, float opacity = 1.0f);
 	void _CalculateAutoScale();
 	void _SetupStrokeStyle(NSVGshape* shape);
+	void _DrawTransparencyGrid();
 
-private:
-	NSVGimage* fSVGImage;
-	float      fScale;
-	float      fOffsetX;
-	float      fOffsetY;
-	bool       fAutoScale;
-	BString    fLoadedFile;
+protected:
+	NSVGimage*       fSVGImage;
+	float            fScale;
+	float            fOffsetX;
+	float            fOffsetY;
+	bool             fAutoScale;
+	BString          fLoadedFile;
+	svg_display_mode fDisplayMode;
+	bool             fShowTransparency;
 };
 
 #endif
