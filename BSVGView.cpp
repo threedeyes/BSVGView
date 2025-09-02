@@ -356,68 +356,65 @@ BSVGView::_ApplyStrokePaint(NSVGpaint* paint, float opacity)
 void
 BSVGView::_SetupGradient(NSVGgradient* gradient, BRect bounds, char gradientType, BGradient** outGradient)
 {
-	if (!gradient || !outGradient || gradient->nstops == 0) {
-		*outGradient = NULL;
-		return;
-	}
+    if (!gradient || !outGradient || gradient->nstops == 0) {
+        *outGradient = NULL;
+        return;
+    }
 
-	BGradient* bgradient = NULL;
+    float* t = gradient->xform;
+    float inv[6];
 
-	float inv[6], xform[6];
-	memcpy(inv, gradient->xform, sizeof(float) * 6);
+    double det = (double)t[0] * t[3] - (double)t[2] * t[1];
+    if (fabs(det) < 1e-6) {
+        *outGradient = NULL;
+        return;
+    }
 
-	double det = (double)inv[0] * inv[3] - (double)inv[2] * inv[1];
-	if (fabs(det) < 1e-6) {
-		*outGradient = NULL;
-		return;
-	}
+    double invdet = 1.0 / det;
+    inv[0] = (float)(t[3] * invdet);
+    inv[1] = (float)(-t[1] * invdet);
+    inv[2] = (float)(-t[2] * invdet);
+    inv[3] = (float)(t[0] * invdet);
+    inv[4] = (float)(((double)t[2] * t[5] - (double)t[3] * t[4]) * invdet);
+    inv[5] = (float)(((double)t[1] * t[4] - (double)t[0] * t[5]) * invdet);
 
-	double invdet = 1.0 / det;
-	xform[0] = (float)(inv[3] * invdet);
-	xform[1] = (float)(-inv[1] * invdet);
-	xform[2] = (float)(-inv[2] * invdet);
-	xform[3] = (float)(inv[0] * invdet);
-	xform[4] = (float)(((double)inv[2] * inv[5] - (double)inv[3] * inv[4]) * invdet);
-	xform[5] = (float)(((double)inv[1] * inv[4] - (double)inv[0] * inv[5]) * invdet);
+    BGradient* bgradient = NULL;
 
-	if (gradientType == NSVG_PAINT_LINEAR_GRADIENT) {
-		float x1 = xform[4];
-		float y1 = xform[5];
+    if (gradientType == NSVG_PAINT_LINEAR_GRADIENT) {
+        float x1_obj = inv[4];
+        float y1_obj = inv[5];
 
-		float dx = xform[2];
-		float dy = xform[3];
+        float x2_obj = inv[2] + inv[4];
+        float y2_obj = inv[3] + inv[5];
 
-		float x2 = x1 + dx;
-		float y2 = y1 + dy;
+        BPoint start(x1_obj * fScale + fOffsetX, y1_obj * fScale + fOffsetY);
+        BPoint end(x2_obj * fScale + fOffsetX, y2_obj * fScale + fOffsetY);
 
-		x1 = x1 * fScale + fOffsetX;
-		y1 = y1 * fScale + fOffsetY;
-		x2 = x2 * fScale + fOffsetX;
-		y2 = y2 * fScale + fOffsetY;
+        bgradient = new BGradientLinear(start, end);
 
-		bgradient = new BGradientLinear(BPoint(x1, y1), BPoint(x2, y2));
-	} else if (gradientType == NSVG_PAINT_RADIAL_GRADIENT) {
-		float cx = xform[4] * fScale + fOffsetX;
-		float cy = xform[5] * fScale + fOffsetY;
-		float radius = sqrtf(xform[0] * xform[0] + xform[3] * xform[3]) * fScale;
+    } else if (gradientType == NSVG_PAINT_RADIAL_GRADIENT) {
+        float cx_obj = inv[4];
+        float cy_obj = inv[5];
+        float rvx_obj = inv[0];
+        float rvy_obj = inv[1];
+        float radius_obj = sqrtf(rvx_obj*rvx_obj + rvy_obj*rvy_obj);
 
-		bgradient = new BGradientRadial(BPoint(cx, cy), radius);
-	}
+        BPoint center(cx_obj * fScale + fOffsetX, cy_obj * fScale + fOffsetY);
+        float radius_view = radius_obj * fScale;
 
-	if (bgradient) {
-		for (int i = 0; i < gradient->nstops; i++) {
-			NSVGgradientStop* stop = &gradient->stops[i];
-			rgb_color color = _ConvertColor(stop->color, 1.0f);
+        bgradient = new BGradientRadial(center, radius_view);
+    }
 
-			float offset = stop->offset * 255.0f;
-			if (offset < 0) offset = 0;
-			if (offset > 255) offset = 255;
+    if (bgradient) {
+        for (int i = 0; i < gradient->nstops; i++) {
+            NSVGgradientStop* stop = &gradient->stops[i];
+            float alpha = ((stop->color >> 24) & 0xFF) / 255.0f;
+            rgb_color color = _ConvertColor(stop->color, alpha);
+            bgradient->AddColor(color, stop->offset * 255.0f);
+        }
+    }
 
-			bgradient->AddColor(color, offset);
-		}
-	}
-
-	*outGradient = bgradient;
+    *outGradient = bgradient;
 }
 
 rgb_color
