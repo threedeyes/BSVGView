@@ -228,46 +228,63 @@ BSVGView::_DrawShape(NSVGshape* shape)
 	if (!shape)
 		return;
 
-	BShape bShape;
-
 	SetDrawingMode(B_OP_ALPHA);
-
-	for (NSVGpath* path = shape->paths; path != NULL; path = path->next) {
-		_ConvertPath(path, bShape);
-	}
 
 	bool drawFill = (fDisplayMode == SVG_DISPLAY_NORMAL || fDisplayMode == SVG_DISPLAY_FILL_ONLY);
 	bool drawStroke = (fDisplayMode == SVG_DISPLAY_NORMAL || fDisplayMode == SVG_DISPLAY_STROKE_ONLY);
 	bool drawOutline = (fDisplayMode == SVG_DISPLAY_OUTLINE);
 
 	if (drawOutline) {
+		PushState();
 		SetHighColor(0, 0, 0);
 		SetPenSize(1.0f);
-		StrokeShape(&bShape);
+		SetLineMode(B_BUTT_CAP, B_MITER_JOIN, 4.0f);
+
+		for (NSVGpath* path = shape->paths; path != NULL; path = path->next) {
+			BShape bShape;
+			_ConvertPath(path, bShape);
+			StrokeShape(&bShape);
+		}
+
+		PopState();
 		return;
 	}
 
-	if (drawFill && shape->fill.type != NSVG_PAINT_NONE) {
+	if (drawFill && shape->fill.type != NSVG_PAINT_NONE && shape->paths) {
+		PushState();
+
+		BShape fillShape;
+		for (NSVGpath* path = shape->paths; path != NULL; path = path->next) {
+			_ConvertPath(path, fillShape);
+		}
+
 		_ApplyFillPaint(&shape->fill, shape->opacity);
 
 		if (shape->fill.type == NSVG_PAINT_LINEAR_GRADIENT ||
 			shape->fill.type == NSVG_PAINT_RADIAL_GRADIENT) {
 			BGradient* gradient = NULL;
-			_SetupGradient(shape->fill.gradient, bShape.Bounds(), shape->fill.type, &gradient);
+			_SetupGradient(shape->fill.gradient, fillShape.Bounds(), shape->fill.type, &gradient);
 			if (gradient) {
-				FillShape(&bShape, *gradient);
+				FillShape(&fillShape, *gradient);
 				delete gradient;
 			} else {
-				FillShape(&bShape);
+				if (shape->fill.gradient && shape->fill.gradient->nstops > 0) {
+					rgb_color color = _ConvertColor(shape->fill.gradient->stops[0].color, shape->opacity);
+					SetHighColor(color);
+				}
+				FillShape(&fillShape);
 			}
 		} else {
-			FillShape(&bShape);
+			FillShape(&fillShape);
 		}
+
+		PopState();
 	}
 
 	if (drawStroke && shape->stroke.type != NSVG_PAINT_NONE && shape->strokeWidth > 0.0f) {
+		PushState();
+
 		_ApplyStrokePaint(&shape->stroke, shape->opacity);
-		_SetupStrokeStyle(shape);
 
 		if (shape->stroke.type == NSVG_PAINT_LINEAR_GRADIENT ||
 			shape->stroke.type == NSVG_PAINT_RADIAL_GRADIENT) {
@@ -276,7 +293,16 @@ BSVGView::_DrawShape(NSVGshape* shape)
 				SetHighColor(color);
 			}
 		}
-		StrokeShape(&bShape);
+
+		_SetupStrokeStyle(shape);
+
+		for (NSVGpath* path = shape->paths; path != NULL; path = path->next) {
+			BShape strokeShape;
+			_ConvertPath(path, strokeShape);
+			StrokeShape(&strokeShape);
+		}
+
+		PopState();
 	}
 }
 
@@ -439,7 +465,9 @@ BSVGView::_ConvertColor(unsigned int color, float opacity)
 void
 BSVGView::_SetupStrokeStyle(NSVGshape* shape)
 {
-	SetPenSize(shape->strokeWidth * fScale);
+	float scaledWidth = shape->strokeWidth * fScale;
+	if (scaledWidth < 0.1f) scaledWidth = 0.1f;
+	SetPenSize(scaledWidth);
 
 	cap_mode capMode = B_BUTT_CAP;
 	join_mode joinMode = B_MITER_JOIN;
@@ -454,6 +482,9 @@ BSVGView::_SetupStrokeStyle(NSVGshape* shape)
 		case NSVG_CAP_SQUARE:
 			capMode = B_SQUARE_CAP;
 			break;
+		default:
+			capMode = B_BUTT_CAP;
+			break;
 	}
 
 	switch (shape->strokeLineJoin) {
@@ -466,9 +497,16 @@ BSVGView::_SetupStrokeStyle(NSVGshape* shape)
 		case NSVG_JOIN_BEVEL:
 			joinMode = B_BEVEL_JOIN;
 			break;
+		default:
+			joinMode = B_MITER_JOIN;
+			break;
 	}
 
-	SetLineMode(capMode, joinMode, shape->miterLimit * fScale);
+	float miterLimit = shape->miterLimit;
+	if (miterLimit < 1.0f) miterLimit = 1.0f;
+	if (miterLimit > 100.0f) miterLimit = 100.0f;
+
+	SetLineMode(capMode, joinMode, miterLimit);
 }
 
 void
