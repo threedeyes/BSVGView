@@ -263,7 +263,7 @@ BSVGView::_DrawShape(NSVGshape* shape)
 		if (shape->fill.type == NSVG_PAINT_LINEAR_GRADIENT ||
 			shape->fill.type == NSVG_PAINT_RADIAL_GRADIENT) {
 			BGradient* gradient = NULL;
-			_SetupGradient(shape->fill.gradient, fillShape.Bounds(), shape->fill.type, &gradient);
+			_SetupGradient(shape->fill.gradient, fillShape.Bounds(), shape->fill.type, &gradient, shape->opacity);
 			if (gradient) {
 				FillShape(&fillShape, *gradient);
 				delete gradient;
@@ -288,6 +288,10 @@ BSVGView::_DrawShape(NSVGshape* shape)
 
 		if (shape->stroke.type == NSVG_PAINT_LINEAR_GRADIENT ||
 			shape->stroke.type == NSVG_PAINT_RADIAL_GRADIENT) {
+			BGradient* strokeGradient = NULL;
+			_SetupGradient(shape->stroke.gradient, Bounds(), shape->stroke.type, &strokeGradient, shape->opacity);
+			if (strokeGradient)
+				delete strokeGradient;
 			if (shape->stroke.gradient && shape->stroke.gradient->nstops > 0) {
 				rgb_color color = _ConvertColor(shape->stroke.gradient->stops[0].color, shape->opacity);
 				SetHighColor(color);
@@ -380,7 +384,7 @@ BSVGView::_ApplyStrokePaint(NSVGpaint* paint, float opacity)
 }
 
 void
-BSVGView::_SetupGradient(NSVGgradient* gradient, BRect bounds, char gradientType, BGradient** outGradient)
+BSVGView::_SetupGradient(NSVGgradient* gradient, BRect bounds, char gradientType, BGradient** outGradient, float shapeOpacity)
 {
     if (!gradient || !outGradient || gradient->nstops == 0) {
         *outGradient = NULL;
@@ -434,8 +438,9 @@ BSVGView::_SetupGradient(NSVGgradient* gradient, BRect bounds, char gradientType
     if (bgradient) {
         for (int i = 0; i < gradient->nstops; i++) {
             NSVGgradientStop* stop = &gradient->stops[i];
-            float alpha = ((stop->color >> 24) & 0xFF) / 255.0f;
-            rgb_color color = _ConvertColor(stop->color, alpha);
+            float stopAlpha = ((stop->color >> 24) & 0xFF) / 255.0f;
+            float combinedAlpha = stopAlpha * shapeOpacity;
+            rgb_color color = _ConvertColor(stop->color, combinedAlpha);
             bgradient->AddColor(color, stop->offset * 255.0f);
         }
     }

@@ -66,7 +66,8 @@ protected:
 	void _ConvertPath(NSVGpath* path, BShape& shape);
 	void _ApplyFillPaint(NSVGpaint* paint, float opacity);
 	void _ApplyStrokePaint(NSVGpaint* paint, float opacity);
-	void _SetupGradient(NSVGgradient* gradient, BRect bounds, char gradientType, BGradient** outGradient);
+	void _SetupGradient(NSVGgradient* gradient, BRect bounds, char gradientType,
+                   BGradient** outGradient, float shapeOpacity = 1.0f);
 	rgb_color _ConvertColor(unsigned int color, float opacity = 1.0f);
 	void _CalculateAutoScale();
 	void _SetupStrokeStyle(NSVGshape* shape);
