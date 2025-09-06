@@ -21,7 +21,8 @@ BSVGView::BSVGView(BRect frame, const char* name, uint32 resizeMask, uint32 flag
 	fOffsetY(0.0f),
 	fAutoScale(true),
 	fDisplayMode(SVG_DISPLAY_NORMAL),
-	fShowTransparency(true)
+	fShowTransparency(true),
+	fBoundingBoxStyle(SVG_BBOX_NONE)
 {
 }
 
@@ -33,7 +34,8 @@ BSVGView::BSVGView(const char* name)
 	fOffsetY(0.0f),
 	fAutoScale(true),
 	fDisplayMode(SVG_DISPLAY_NORMAL),
-	fShowTransparency(true)
+	fShowTransparency(true),
+	fBoundingBoxStyle(SVG_BBOX_NONE)
 {
 }
 
@@ -107,8 +109,13 @@ BSVGView::Draw(BRect updateRect)
 
 	BRegion region(Bounds());
 	ConstrainClippingRegion(&region);
+
 	if (fShowTransparency)
 		_DrawTransparencyGrid();
+
+	if (fBoundingBoxStyle != SVG_BBOX_NONE) {
+		_DrawBoundingBox();
+	}
 
 	for (NSVGshape* shape = fSVGImage->shapes; shape != NULL; shape = shape->next) {
 		if (shape->flags & NSVG_FLAGS_VISIBLE) {
@@ -216,10 +223,33 @@ BSVGView::SetShowTransparency(bool show)
 	}
 }
 
+void
+BSVGView::SetBoundingBoxStyle(svg_boundingbox_style style)
+{
+	if (fBoundingBoxStyle != style) {
+		fBoundingBoxStyle = style;
+		Invalidate();
+	}
+}
+
 BRect
 BSVGView::SVGBounds() const
 {
 	return fSVGImage ? BRect(0, 0, fSVGImage->width - 1, fSVGImage->height - 1) : BRect();
+}
+
+BRect
+BSVGView::SVGViewBounds() const
+{
+	if (!fSVGImage)
+		return BRect();
+
+	float scaledWidth = fSVGImage->width * fScale;
+	float scaledHeight = fSVGImage->height * fScale;
+
+	return BRect(fOffsetX, fOffsetY,
+				fOffsetX + scaledWidth,
+				fOffsetY + scaledHeight);
 }
 
 void
@@ -562,4 +592,74 @@ BSVGView::_DrawTransparencyGrid()
 			FillRect(BRect(x * cellSize, y * cellSize, (x + 1) * cellSize, (y + 1) * cellSize));
 		}
 	}
+}
+
+void
+BSVGView::_DrawBoundingBox()
+{
+	if (!fSVGImage || fBoundingBoxStyle == SVG_BBOX_NONE)
+		return;
+
+	BRect svgBounds = SVGViewBounds();
+
+	switch (fBoundingBoxStyle) {
+		case SVG_BBOX_DOCUMENT:
+			_DrawDocumentStyle(svgBounds);
+			break;
+		case SVG_BBOX_SIMPLE_FRAME:
+			_DrawSimpleFrame(svgBounds);
+			break;
+		case SVG_BBOX_TRANSPARENT_GRAY:
+			_DrawTransparentGray(svgBounds);
+			break;
+		default:
+			break;
+	}
+}
+
+void
+BSVGView::_DrawDocumentStyle(BRect bounds)
+{
+	PushState();
+
+	BRect shadowRect = bounds;
+	shadowRect.OffsetBy(3, 3);
+	SetHighColor(0, 0, 0, 60);
+	SetDrawingMode(B_OP_ALPHA);
+	FillRect(shadowRect);
+
+	SetHighColor(255, 255, 255);
+	SetDrawingMode(B_OP_COPY);
+	FillRect(bounds);
+
+	SetHighColor(180, 180, 180);
+	SetPenSize(1.0f);
+	StrokeRect(bounds);
+
+	PopState();
+}
+
+void
+BSVGView::_DrawSimpleFrame(BRect bounds)
+{
+	PushState();
+
+	SetHighColor(100, 100, 100);
+	SetPenSize(1.0f);
+	SetDrawingMode(B_OP_COPY);
+	StrokeRect(bounds);
+
+	PopState();
+}
+
+void
+BSVGView::_DrawTransparentGray(BRect bounds)
+{
+	PushState();
+
+	SetHighColor(128, 128, 128, 80);
+	SetDrawingMode(B_OP_ALPHA);
+	FillRect(bounds);
+
+	PopState();
 }

@@ -20,6 +20,18 @@ const uint32 MSG_FIT_WINDOW = 'fitw';
 const uint32 MSG_ACTUAL_SIZE = 'acts';
 const uint32 MSG_CENTER = 'cent';
 
+const uint32 MSG_DISPLAY_NORMAL = 'dpnm';
+const uint32 MSG_DISPLAY_OUTLINE = 'dpot';
+const uint32 MSG_DISPLAY_FILL = 'dpfl';
+const uint32 MSG_DISPLAY_STROKE = 'dpst';
+
+const uint32 MSG_BBOX_NONE = 'bbn0';
+const uint32 MSG_BBOX_DOCUMENT = 'bbdc';
+const uint32 MSG_BBOX_FRAME = 'bbfr';
+const uint32 MSG_BBOX_GRAY = 'bbgr';
+
+const uint32 MSG_TOGGLE_TRANSPARENCY = 'tgtr';
+
 class SVGWindow : public BWindow {
 public:
 	SVGWindow(const char* filePath = NULL)
@@ -31,17 +43,39 @@ public:
 
 		BMenuBar* menuBar = new BMenuBar(BRect(0, 0, bounds.right, 20), "menubar");
 
+		// File menu
 		BMenu* fileMenu = new BMenu("File");
 		fileMenu->AddItem(new BMenuItem("Open...", new BMessage(MSG_OPEN_FILE), 'O'));
 		fileMenu->AddSeparatorItem();
 		fileMenu->AddItem(new BMenuItem("Quit", new BMessage(B_QUIT_REQUESTED), 'Q'));
 		menuBar->AddItem(fileMenu);
 
+		// View menu
 		BMenu* viewMenu = new BMenu("View");
 		viewMenu->AddItem(new BMenuItem("Fit to Window", new BMessage(MSG_FIT_WINDOW), 'F'));
 		viewMenu->AddItem(new BMenuItem("Actual Size", new BMessage(MSG_ACTUAL_SIZE), '1'));
 		viewMenu->AddItem(new BMenuItem("Center", new BMessage(MSG_CENTER), 'C'));
+		viewMenu->AddSeparatorItem();
+
+		// Display Mode submenu
+		BMenu* displayMenu = new BMenu("Display Mode");
+		displayMenu->AddItem(new BMenuItem("Normal", new BMessage(MSG_DISPLAY_NORMAL)));
+		displayMenu->AddItem(new BMenuItem("Outline", new BMessage(MSG_DISPLAY_OUTLINE)));
+		displayMenu->AddItem(new BMenuItem("Fill Only", new BMessage(MSG_DISPLAY_FILL)));
+		displayMenu->AddItem(new BMenuItem("Stroke Only", new BMessage(MSG_DISPLAY_STROKE)));
+		viewMenu->AddItem(displayMenu);
+
+		viewMenu->AddSeparatorItem();
+		viewMenu->AddItem(new BMenuItem("Show Transparency Grid", new BMessage(MSG_TOGGLE_TRANSPARENCY), 'T'));
 		menuBar->AddItem(viewMenu);
+
+		// BoundingBox menu
+		BMenu* bboxMenu = new BMenu("BoundingBox");
+		bboxMenu->AddItem(new BMenuItem("None", new BMessage(MSG_BBOX_NONE)));
+		bboxMenu->AddItem(new BMenuItem("Document Style", new BMessage(MSG_BBOX_DOCUMENT)));
+		bboxMenu->AddItem(new BMenuItem("Simple Frame", new BMessage(MSG_BBOX_FRAME)));
+		bboxMenu->AddItem(new BMenuItem("Transparent Gray", new BMessage(MSG_BBOX_GRAY)));
+		menuBar->AddItem(bboxMenu);
 
 		AddChild(menuBar);
 
@@ -54,6 +88,8 @@ public:
 		if (filePath) {
 			LoadFile(filePath);
 		}
+
+		_UpdateMenuStates();
 	}
 
 	~SVGWindow()
@@ -108,6 +144,42 @@ public:
 			case MSG_CENTER:
 				fSVGView->CenterImage();
 				break;
+			case MSG_DISPLAY_NORMAL:
+				fSVGView->SetDisplayMode(SVG_DISPLAY_NORMAL);
+				_UpdateMenuStates();
+				break;
+			case MSG_DISPLAY_OUTLINE:
+				fSVGView->SetDisplayMode(SVG_DISPLAY_OUTLINE);
+				_UpdateMenuStates();
+				break;
+			case MSG_DISPLAY_FILL:
+				fSVGView->SetDisplayMode(SVG_DISPLAY_FILL_ONLY);
+				_UpdateMenuStates();
+				break;
+			case MSG_DISPLAY_STROKE:
+				fSVGView->SetDisplayMode(SVG_DISPLAY_STROKE_ONLY);
+				_UpdateMenuStates();
+				break;
+			case MSG_BBOX_NONE:
+				fSVGView->SetBoundingBoxStyle(SVG_BBOX_NONE);
+				_UpdateMenuStates();
+				break;
+			case MSG_BBOX_DOCUMENT:
+				fSVGView->SetBoundingBoxStyle(SVG_BBOX_DOCUMENT);
+				_UpdateMenuStates();
+				break;
+			case MSG_BBOX_FRAME:
+				fSVGView->SetBoundingBoxStyle(SVG_BBOX_SIMPLE_FRAME);
+				_UpdateMenuStates();
+				break;
+			case MSG_BBOX_GRAY:
+				fSVGView->SetBoundingBoxStyle(SVG_BBOX_TRANSPARENT_GRAY);
+				_UpdateMenuStates();
+				break;
+			case MSG_TOGGLE_TRANSPARENCY:
+				fSVGView->SetShowTransparency(!fSVGView->ShowTransparency());
+				_UpdateMenuStates();
+				break;
 			default:
 				BWindow::MessageReceived(message);
 				break;
@@ -128,6 +200,60 @@ private:
 			BPath path(&ref);
 			if (path.InitCheck() == B_OK) {
 				LoadFile(path.Path());
+			}
+		}
+	}
+
+	void _UpdateMenuStates()
+	{
+		BMenuBar* menuBar = KeyMenuBar();
+		if (!menuBar)
+			return;
+
+		// Update Display Mode menu
+		BMenu* viewMenu = menuBar->SubmenuAt(1);
+		if (viewMenu) {
+			BMenu* displayMenu = viewMenu->FindItem("Display Mode")->Submenu();
+			if (displayMenu) {
+				svg_display_mode currentMode = fSVGView->DisplayMode();
+				for (int32 i = 0; i < displayMenu->CountItems(); i++) {
+					BMenuItem* item = displayMenu->ItemAt(i);
+					if (item) {
+						bool marked = false;
+						switch (i) {
+							case 0: marked = (currentMode == SVG_DISPLAY_NORMAL); break;
+							case 1: marked = (currentMode == SVG_DISPLAY_OUTLINE); break;
+							case 2: marked = (currentMode == SVG_DISPLAY_FILL_ONLY); break;
+							case 3: marked = (currentMode == SVG_DISPLAY_STROKE_ONLY); break;
+						}
+						item->SetMarked(marked);
+					}
+				}
+			}
+
+			// Update transparency grid menu item
+			BMenuItem* transparencyItem = viewMenu->FindItem("Show Transparency Grid");
+			if (transparencyItem) {
+				transparencyItem->SetMarked(fSVGView->ShowTransparency());
+			}
+		}
+
+		// Update BoundingBox menu
+		BMenu* bboxMenu = menuBar->SubmenuAt(2);
+		if (bboxMenu) {
+			svg_boundingbox_style currentStyle = fSVGView->BoundingBoxStyle();
+			for (int32 i = 0; i < bboxMenu->CountItems(); i++) {
+				BMenuItem* item = bboxMenu->ItemAt(i);
+				if (item) {
+					bool marked = false;
+					switch (i) {
+						case 0: marked = (currentStyle == SVG_BBOX_NONE); break;
+						case 1: marked = (currentStyle == SVG_BBOX_DOCUMENT); break;
+						case 2: marked = (currentStyle == SVG_BBOX_SIMPLE_FRAME); break;
+						case 3: marked = (currentStyle == SVG_BBOX_TRANSPARENT_GRAY); break;
+					}
+					item->SetMarked(marked);
+				}
 			}
 		}
 	}

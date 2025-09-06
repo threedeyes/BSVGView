@@ -24,6 +24,13 @@ enum svg_display_mode {
 	SVG_DISPLAY_STROKE_ONLY
 };
 
+enum svg_boundingbox_style {
+	SVG_BBOX_NONE = 0,
+	SVG_BBOX_DOCUMENT,
+	SVG_BBOX_SIMPLE_FRAME,
+	SVG_BBOX_TRANSPARENT_GRAY
+};
+
 class BSVGView : public BView {
 public:
 	BSVGView(BRect frame, const char* name,
@@ -53,7 +60,11 @@ public:
 	void SetShowTransparency(bool show);
 	bool ShowTransparency() const { return fShowTransparency; }
 
+	void SetBoundingBoxStyle(svg_boundingbox_style style);
+	svg_boundingbox_style BoundingBoxStyle() const { return fBoundingBoxStyle; }
+
 	BRect SVGBounds() const;
+	BRect SVGViewBounds() const;
 	float SVGWidth() const { return fSVGImage ? fSVGImage->width : 0.0f; }
 	float SVGHeight() const { return fSVGImage ? fSVGImage->height : 0.0f; }
 	float Scale() const { return fScale; }
@@ -72,16 +83,21 @@ protected:
 	void _CalculateAutoScale();
 	void _SetupStrokeStyle(NSVGshape* shape);
 	void _DrawTransparencyGrid();
+	void _DrawBoundingBox();
+	void _DrawDocumentStyle(BRect bounds);
+	void _DrawSimpleFrame(BRect bounds);
+	void _DrawTransparentGray(BRect bounds);
 
 protected:
-	NSVGimage*       fSVGImage;
-	float            fScale;
-	float            fOffsetX;
-	float            fOffsetY;
-	bool             fAutoScale;
-	BString          fLoadedFile;
-	svg_display_mode fDisplayMode;
-	bool             fShowTransparency;
+	NSVGimage*            fSVGImage;
+	float                 fScale;
+	float                 fOffsetX;
+	float                 fOffsetY;
+	bool                  fAutoScale;
+	BString               fLoadedFile;
+	svg_display_mode      fDisplayMode;
+	bool                  fShowTransparency;
+	svg_boundingbox_style fBoundingBoxStyle;
 };
 
 #endif
