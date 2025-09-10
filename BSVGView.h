@@ -69,6 +69,7 @@ public:
 	float SVGHeight() const { return fSVGImage ? fSVGImage->height : 0.0f; }
 	float Scale() const { return fScale; }
 	BPoint Offset() const { return BPoint(fOffsetX, fOffsetY); }
+	NSVGimage* SVGImage() const { return fSVGImage; }
 
 	bool  IsLoaded() const { return fSVGImage != NULL; }
 
