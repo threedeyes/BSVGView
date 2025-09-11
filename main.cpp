@@ -32,6 +32,14 @@ const uint32 MSG_BBOX_GRAY = 'bbgr';
 
 const uint32 MSG_TOGGLE_TRANSPARENCY = 'tgtr';
 
+const uint32 MSG_SVG_STATUS_UPDATE = 'svgu';
+
+const uint32 MSG_SHAPE_SELECTED = 'shps';
+const uint32 MSG_PATH_SELECTED = 'pths';
+const uint32 MSG_CONTROL_POINTS_SELECTED = 'ctps';
+const uint32 MSG_CLEAR_SELECTION = 'clrs';
+
+
 class SVGWindow : public BWindow {
 public:
 	SVGWindow(const char* filePath = NULL)
@@ -43,21 +51,18 @@ public:
 
 		BMenuBar* menuBar = new BMenuBar(BRect(0, 0, bounds.right, 20), "menubar");
 
-		// File menu
 		BMenu* fileMenu = new BMenu("File");
 		fileMenu->AddItem(new BMenuItem("Open...", new BMessage(MSG_OPEN_FILE), 'O'));
 		fileMenu->AddSeparatorItem();
 		fileMenu->AddItem(new BMenuItem("Quit", new BMessage(B_QUIT_REQUESTED), 'Q'));
 		menuBar->AddItem(fileMenu);
 
-		// View menu
 		BMenu* viewMenu = new BMenu("View");
 		viewMenu->AddItem(new BMenuItem("Fit to Window", new BMessage(MSG_FIT_WINDOW), 'F'));
 		viewMenu->AddItem(new BMenuItem("Actual Size", new BMessage(MSG_ACTUAL_SIZE), '1'));
 		viewMenu->AddItem(new BMenuItem("Center", new BMessage(MSG_CENTER), 'C'));
 		viewMenu->AddSeparatorItem();
 
-		// Display Mode submenu
 		BMenu* displayMenu = new BMenu("Display Mode");
 		displayMenu->AddItem(new BMenuItem("Normal", new BMessage(MSG_DISPLAY_NORMAL)));
 		displayMenu->AddItem(new BMenuItem("Outline", new BMessage(MSG_DISPLAY_OUTLINE)));
@@ -69,13 +74,31 @@ public:
 		viewMenu->AddItem(new BMenuItem("Show Transparency Grid", new BMessage(MSG_TOGGLE_TRANSPARENCY), 'T'));
 		menuBar->AddItem(viewMenu);
 
-		// BoundingBox menu
 		BMenu* bboxMenu = new BMenu("BoundingBox");
 		bboxMenu->AddItem(new BMenuItem("None", new BMessage(MSG_BBOX_NONE)));
 		bboxMenu->AddItem(new BMenuItem("Document Style", new BMessage(MSG_BBOX_DOCUMENT)));
 		bboxMenu->AddItem(new BMenuItem("Simple Frame", new BMessage(MSG_BBOX_FRAME)));
 		bboxMenu->AddItem(new BMenuItem("Transparent Gray", new BMessage(MSG_BBOX_GRAY)));
 		menuBar->AddItem(bboxMenu);
+
+		BMenu* highlightMenu = new BMenu("Highlight");
+		BMessage* shapeMsg = new BMessage(MSG_SHAPE_SELECTED);
+		shapeMsg->AddInt32("shape_index", 0);
+		highlightMenu->AddItem(new BMenuItem("Highlight Shape 0", shapeMsg));
+
+		BMessage* pathMsg = new BMessage(MSG_PATH_SELECTED);
+		pathMsg->AddInt32("shape_index", 0);
+		pathMsg->AddInt32("path_index", 0);
+		highlightMenu->AddItem(new BMenuItem("Highlight Path 0:0", pathMsg));
+
+		BMessage* ctrlMsg = new BMessage(MSG_CONTROL_POINTS_SELECTED);
+		ctrlMsg->AddInt32("shape_index", 0);
+		ctrlMsg->AddInt32("path_index", 0);
+		ctrlMsg->AddBool("show_bezier_handles", true);
+		highlightMenu->AddItem(new BMenuItem("Show Control Points", ctrlMsg));
+
+		highlightMenu->AddItem(new BMenuItem("Clear Selection", new BMessage(MSG_CLEAR_SELECTION)));
+		menuBar->AddItem(highlightMenu);
 
 		AddChild(menuBar);
 
@@ -85,9 +108,8 @@ public:
 		fSVGView = new BSVGView(svgRect, "svg_view");
 		AddChild(fSVGView);
 
-		if (filePath) {
+		if (filePath)
 			LoadFile(filePath);
-		}
 
 		_UpdateMenuStates();
 	}
@@ -180,6 +202,37 @@ public:
 				fSVGView->SetShowTransparency(!fSVGView->ShowTransparency());
 				_UpdateMenuStates();
 				break;
+			case MSG_SHAPE_SELECTED:
+			{
+				int32 shapeIndex;
+				if (message->FindInt32("shape_index", &shapeIndex) == B_OK) {
+					fSVGView->SetHighlightedShape(shapeIndex);
+				}
+				break;
+			}
+			case MSG_PATH_SELECTED:
+			{
+				int32 shapeIndex, pathIndex;
+				if (message->FindInt32("shape_index", &shapeIndex) == B_OK &&
+					message->FindInt32("path_index", &pathIndex) == B_OK) {
+					fSVGView->SetHighlightedPath(shapeIndex, pathIndex);
+				}
+				break;
+			}
+			case MSG_CONTROL_POINTS_SELECTED:
+			{
+				int32 shapeIndex, pathIndex;
+				bool showBezierHandles = false;
+				if (message->FindInt32("shape_index", &shapeIndex) == B_OK &&
+					message->FindInt32("path_index", &pathIndex) == B_OK) {
+					message->FindBool("show_bezier_handles", &showBezierHandles);
+					fSVGView->SetHighlightControlPoints(shapeIndex, pathIndex, showBezierHandles);
+				}
+				break;
+			}
+			case MSG_CLEAR_SELECTION:
+				fSVGView->ClearHighlight();
+				break;
 			default:
 				BWindow::MessageReceived(message);
 				break;
@@ -210,7 +263,6 @@ private:
 		if (!menuBar)
 			return;
 
-		// Update Display Mode menu
 		BMenu* viewMenu = menuBar->SubmenuAt(1);
 		if (viewMenu) {
 			BMenu* displayMenu = viewMenu->FindItem("Display Mode")->Submenu();
@@ -231,14 +283,12 @@ private:
 				}
 			}
 
-			// Update transparency grid menu item
 			BMenuItem* transparencyItem = viewMenu->FindItem("Show Transparency Grid");
 			if (transparencyItem) {
 				transparencyItem->SetMarked(fSVGView->ShowTransparency());
 			}
 		}
 
-		// Update BoundingBox menu
 		BMenu* bboxMenu = menuBar->SubmenuAt(2);
 		if (bboxMenu) {
 			svg_boundingbox_style currentStyle = fSVGView->BoundingBoxStyle();

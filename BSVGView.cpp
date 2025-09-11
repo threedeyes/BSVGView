@@ -97,6 +97,7 @@ BSVGView::Unload()
 		fSVGImage = NULL;
 	}
 	fLoadedFile.SetTo("");
+	ClearHighlight();
 }
 
 void
@@ -117,11 +118,16 @@ BSVGView::Draw(BRect updateRect)
 		_DrawBoundingBox();
 	}
 
+	int32 shapeIndex = 0;
 	for (NSVGshape* shape = fSVGImage->shapes; shape != NULL; shape = shape->next) {
 		if (shape->flags & NSVG_FLAGS_VISIBLE) {
-			_DrawShape(shape);
+			_DrawShape(shape, shapeIndex);
 		}
+		shapeIndex++;
 	}
+
+	// Draw highlight on top of everything
+	_DrawHighlight();
 
 	PopState();
 }
@@ -232,6 +238,50 @@ BSVGView::SetBoundingBoxStyle(svg_boundingbox_style style)
 	}
 }
 
+void
+BSVGView::SetHighlightedShape(int32 shapeIndex)
+{
+	fHighlightInfo.mode = SVG_HIGHLIGHT_SHAPE;
+	fHighlightInfo.shapeIndex = shapeIndex;
+	fHighlightInfo.pathIndex = -1;
+	fHighlightInfo.showControlPoints = false;
+	fHighlightInfo.showBezierHandles = false;
+	Invalidate();
+}
+
+void
+BSVGView::SetHighlightedPath(int32 shapeIndex, int32 pathIndex)
+{
+	fHighlightInfo.mode = SVG_HIGHLIGHT_PATH;
+	fHighlightInfo.shapeIndex = shapeIndex;
+	fHighlightInfo.pathIndex = pathIndex;
+	fHighlightInfo.showControlPoints = true;
+	fHighlightInfo.showBezierHandles = false;
+	Invalidate();
+}
+
+void
+BSVGView::SetHighlightControlPoints(int32 shapeIndex, int32 pathIndex, bool showBezierHandles)
+{
+	fHighlightInfo.mode = SVG_HIGHLIGHT_CONTROL_POINTS;
+	fHighlightInfo.shapeIndex = shapeIndex;
+	fHighlightInfo.pathIndex = pathIndex;
+	fHighlightInfo.showControlPoints = true;
+	fHighlightInfo.showBezierHandles = showBezierHandles;
+	Invalidate();
+}
+
+void
+BSVGView::ClearHighlight()
+{
+	fHighlightInfo.mode = SVG_HIGHLIGHT_NONE;
+	fHighlightInfo.shapeIndex = -1;
+	fHighlightInfo.pathIndex = -1;
+	fHighlightInfo.showControlPoints = false;
+	fHighlightInfo.showBezierHandles = false;
+	Invalidate();
+}
+
 BRect
 BSVGView::SVGBounds() const
 {
@@ -253,7 +303,7 @@ BSVGView::SVGViewBounds() const
 }
 
 void
-BSVGView::_DrawShape(NSVGshape* shape)
+BSVGView::_DrawShape(NSVGshape* shape, int32 shapeIndex)
 {
 	if (!shape)
 		return;
@@ -341,6 +391,201 @@ BSVGView::_DrawShape(NSVGshape* shape)
 }
 
 void
+BSVGView::_DrawHighlight()
+{
+	if (fHighlightInfo.mode == SVG_HIGHLIGHT_NONE || !fSVGImage)
+		return;
+
+	int32 currentIndex = 0;
+	NSVGshape* shape = fSVGImage->shapes;
+
+	while (shape && currentIndex < fHighlightInfo.shapeIndex) {
+		shape = shape->next;
+		currentIndex++;
+	}
+
+	if (!shape)
+		return;
+
+	PushState();
+	SetDrawingMode(B_OP_ALPHA);
+
+	if (fHighlightInfo.mode == SVG_HIGHLIGHT_SHAPE) {
+		_DrawShapeHighlight(shape);
+	} else if (fHighlightInfo.mode == SVG_HIGHLIGHT_PATH ||
+			   fHighlightInfo.mode == SVG_HIGHLIGHT_CONTROL_POINTS) {
+		int32 pathIndex = 0;
+		NSVGpath* path = shape->paths;
+
+		while (path && pathIndex < fHighlightInfo.pathIndex) {
+			path = path->next;
+			pathIndex++;
+		}
+
+		if (path) {
+			_DrawPathHighlight(shape, path);
+
+			if (fHighlightInfo.showControlPoints)
+				_DrawControlPoints(path);
+
+			if (fHighlightInfo.showBezierHandles)
+				_DrawBezierHandles(path);
+		}
+	}
+
+	PopState();
+}
+
+void
+BSVGView::_DrawShapeHighlight(NSVGshape* shape)
+{
+	if (!shape)
+		return;
+
+	for (NSVGpath* path = shape->paths; path != NULL; path = path->next)
+		_DrawHighlightOutline(path, 4.0f);
+}
+
+void
+BSVGView::_DrawPathHighlight(NSVGshape* shape, NSVGpath* path)
+{
+	if (!path)
+		return;
+
+	_DrawHighlightOutline(path, 3.0f);
+}
+
+void
+BSVGView::_DrawHighlightOutline(NSVGpath* path, float width)
+{
+	if (!path || path->npts < 2)
+		return;
+
+	BShape highlightShape;
+	_ConvertPath(path, highlightShape);
+
+	SetHighColor(255, 255, 255, 180);
+	SetPenSize(width + 2.0f);
+	SetLineMode(B_ROUND_CAP, B_ROUND_JOIN, 10.0f);
+	StrokeShape(&highlightShape);
+
+	SetHighColor(255, 100, 0, 220); // Orange
+	SetPenSize(width);
+	StrokeShape(&highlightShape);
+}
+
+void
+BSVGView::_DrawControlPoints(NSVGpath* path)
+{
+	if (!path)
+		return;
+
+	for (int i = 0; i < path->npts; i++) {
+		BPoint point = _ConvertSVGPoint(path->pts[i*2], path->pts[i*2 + 1]);
+		bool isEndPoint = (i % 3 == 0);
+		_DrawControlPoint(point, isEndPoint, false);
+	}
+}
+
+void
+BSVGView::_DrawBezierHandles(NSVGpath* path)
+{
+	if (!path)
+		return;
+
+	for (int i = 0; i < path->npts; i += 3) {
+		if (i + 2 < path->npts) {
+			BPoint anchor1 = _ConvertSVGPoint(path->pts[i*2], path->pts[i*2 + 1]);
+			BPoint control1 = _ConvertSVGPoint(path->pts[(i+1)*2], path->pts[(i+1)*2 + 1]);
+			BPoint control2 = _ConvertSVGPoint(path->pts[(i+2)*2], path->pts[(i+2)*2 + 1]);
+
+			BPoint anchor2;
+			if (i + 3 < path->npts) {
+				anchor2 = _ConvertSVGPoint(path->pts[(i+3)*2], path->pts[(i+3)*2 + 1]);
+			} else if (path->closed && path->npts > 3) {
+				anchor2 = _ConvertSVGPoint(path->pts[0], path->pts[1]);
+			} else {
+				continue;
+			}
+
+			SetHighColor(100, 100, 100, 196);
+			SetPenSize(1.0f);
+			SetLineMode(B_BUTT_CAP, B_MITER_JOIN, 4.0f);
+
+			if (control1 != anchor1)
+				StrokeLine(anchor1, control1);
+
+			if (control2 != anchor2)
+				StrokeLine(anchor2, control2);
+
+			if (control1 != anchor1)
+				_DrawControlPoint(control1, false, false);
+
+			if (control2 != anchor2)
+				_DrawControlPoint(control2, false, false);
+		}
+	}
+}
+
+void
+BSVGView::_DrawControlPoint(BPoint point, bool isEndPoint, bool isSelected)
+{
+	float size = _GetControlPointSize();
+	BRect pointRect(point.x - size/2, point.y - size/2,
+					point.x + size/2, point.y + size/2);
+
+	SetHighColor(255, 255, 255, 240);
+
+	if (isEndPoint)
+		FillRect(pointRect);
+	else
+		FillEllipse(pointRect);
+
+	if (isSelected) {
+		SetHighColor(255, 0, 0, 255); // Red for selected
+	} else if (isEndPoint) {
+		SetHighColor(0, 0, 0, 255); // Black for endpoints
+	} else {
+		SetHighColor(100, 100, 255, 255); // Blue for control points
+	}
+
+	SetPenSize(1.5f);
+	if (isEndPoint)
+		StrokeRect(pointRect);
+	else
+		StrokeEllipse(pointRect);
+
+	rgb_color fillColor;
+	if (isSelected) {
+		fillColor = {255, 100, 100, 200};
+	} else if (isEndPoint) {
+		fillColor = {220, 220, 220, 200};
+	} else {
+		fillColor = {180, 180, 255, 200};
+	}
+
+	SetHighColor(fillColor);
+	pointRect.InsetBy(1, 1);
+	if (isEndPoint)
+		FillRect(pointRect);
+	else
+		FillEllipse(pointRect);
+}
+
+BPoint
+BSVGView::_ConvertSVGPoint(float x, float y) const
+{
+	return BPoint(x * fScale + fOffsetX, y * fScale + fOffsetY);
+}
+
+float
+BSVGView::_GetControlPointSize() const
+{
+	// TODO: add logic for dynamic size calculation
+	return 8.0f;
+}
+
+void
 BSVGView::_ConvertPath(NSVGpath* path, BShape& shape)
 {
 	if (!path || path->npts < 2)
@@ -416,66 +661,66 @@ BSVGView::_ApplyStrokePaint(NSVGpaint* paint, float opacity)
 void
 BSVGView::_SetupGradient(NSVGgradient* gradient, BRect bounds, char gradientType, BGradient** outGradient, float shapeOpacity)
 {
-    if (!gradient || !outGradient || gradient->nstops == 0) {
-        *outGradient = NULL;
-        return;
-    }
+	if (!gradient || !outGradient || gradient->nstops == 0) {
+		*outGradient = NULL;
+		return;
+	}
 
-    float* t = gradient->xform;
-    float inv[6];
+	float* t = gradient->xform;
+	float inv[6];
 
-    double det = (double)t[0] * t[3] - (double)t[2] * t[1];
-    if (fabs(det) < 1e-6) {
-        *outGradient = NULL;
-        return;
-    }
+	double det = (double)t[0] * t[3] - (double)t[2] * t[1];
+	if (fabs(det) < 1e-6) {
+		*outGradient = NULL;
+		return;
+	}
 
-    double invdet = 1.0 / det;
-    inv[0] = (float)(t[3] * invdet);
-    inv[1] = (float)(-t[1] * invdet);
-    inv[2] = (float)(-t[2] * invdet);
-    inv[3] = (float)(t[0] * invdet);
-    inv[4] = (float)(((double)t[2] * t[5] - (double)t[3] * t[4]) * invdet);
-    inv[5] = (float)(((double)t[1] * t[4] - (double)t[0] * t[5]) * invdet);
+	double invdet = 1.0 / det;
+	inv[0] = (float)(t[3] * invdet);
+	inv[1] = (float)(-t[1] * invdet);
+	inv[2] = (float)(-t[2] * invdet);
+	inv[3] = (float)(t[0] * invdet);
+	inv[4] = (float)(((double)t[2] * t[5] - (double)t[3] * t[4]) * invdet);
+	inv[5] = (float)(((double)t[1] * t[4] - (double)t[0] * t[5]) * invdet);
 
-    BGradient* bgradient = NULL;
+	BGradient* bgradient = NULL;
 
-    if (gradientType == NSVG_PAINT_LINEAR_GRADIENT) {
-        float x1_obj = inv[4];
-        float y1_obj = inv[5];
+	if (gradientType == NSVG_PAINT_LINEAR_GRADIENT) {
+		float x1_obj = inv[4];
+		float y1_obj = inv[5];
 
-        float x2_obj = inv[2] + inv[4];
-        float y2_obj = inv[3] + inv[5];
+		float x2_obj = inv[2] + inv[4];
+		float y2_obj = inv[3] + inv[5];
 
-        BPoint start(x1_obj * fScale + fOffsetX, y1_obj * fScale + fOffsetY);
-        BPoint end(x2_obj * fScale + fOffsetX, y2_obj * fScale + fOffsetY);
+		BPoint start(x1_obj * fScale + fOffsetX, y1_obj * fScale + fOffsetY);
+		BPoint end(x2_obj * fScale + fOffsetX, y2_obj * fScale + fOffsetY);
 
-        bgradient = new BGradientLinear(start, end);
+		bgradient = new BGradientLinear(start, end);
 
-    } else if (gradientType == NSVG_PAINT_RADIAL_GRADIENT) {
-        float cx_obj = inv[4];
-        float cy_obj = inv[5];
-        float rvx_obj = inv[0];
-        float rvy_obj = inv[1];
-        float radius_obj = sqrtf(rvx_obj*rvx_obj + rvy_obj*rvy_obj);
+	} else if (gradientType == NSVG_PAINT_RADIAL_GRADIENT) {
+		float cx_obj = inv[4];
+		float cy_obj = inv[5];
+		float rvx_obj = inv[0];
+		float rvy_obj = inv[1];
+		float radius_obj = sqrtf(rvx_obj*rvx_obj + rvy_obj*rvy_obj);
 
-        BPoint center(cx_obj * fScale + fOffsetX, cy_obj * fScale + fOffsetY);
-        float radius_view = radius_obj * fScale;
+		BPoint center(cx_obj * fScale + fOffsetX, cy_obj * fScale + fOffsetY);
+		float radius_view = radius_obj * fScale;
 
-        bgradient = new BGradientRadial(center, radius_view);
-    }
+		bgradient = new BGradientRadial(center, radius_view);
+	}
 
-    if (bgradient) {
-        for (int i = 0; i < gradient->nstops; i++) {
-            NSVGgradientStop* stop = &gradient->stops[i];
-            float stopAlpha = ((stop->color >> 24) & 0xFF) / 255.0f;
-            float combinedAlpha = stopAlpha * shapeOpacity;
-            rgb_color color = _ConvertColor(stop->color, combinedAlpha);
-            bgradient->AddColor(color, stop->offset * 255.0f);
-        }
-    }
+	if (bgradient) {
+		for (int i = 0; i < gradient->nstops; i++) {
+			NSVGgradientStop* stop = &gradient->stops[i];
+			float stopAlpha = ((stop->color >> 24) & 0xFF) / 255.0f;
+			float combinedAlpha = stopAlpha * shapeOpacity;
+			rgb_color color = _ConvertColor(stop->color, combinedAlpha);
+			bgradient->AddColor(color, stop->offset * 255.0f);
+		}
+	}
 
-    *outGradient = bgradient;
+	*outGradient = bgradient;
 }
 
 rgb_color

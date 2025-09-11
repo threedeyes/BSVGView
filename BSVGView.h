@@ -31,6 +31,24 @@ enum svg_boundingbox_style {
 	SVG_BBOX_TRANSPARENT_GRAY
 };
 
+enum svg_highlight_mode {
+	SVG_HIGHLIGHT_NONE = 0,
+	SVG_HIGHLIGHT_SHAPE,
+	SVG_HIGHLIGHT_PATH,
+	SVG_HIGHLIGHT_CONTROL_POINTS
+};
+
+struct HighlightInfo {
+	svg_highlight_mode mode;
+	int32 shapeIndex;
+	int32 pathIndex;
+	bool showControlPoints;
+	bool showBezierHandles;
+
+	HighlightInfo() : mode(SVG_HIGHLIGHT_NONE), shapeIndex(-1),
+		pathIndex(-1), showControlPoints(false), showBezierHandles(false) {}
+};
+
 class BSVGView : public BView {
 public:
 	BSVGView(BRect frame, const char* name,
@@ -63,6 +81,12 @@ public:
 	void SetBoundingBoxStyle(svg_boundingbox_style style);
 	svg_boundingbox_style BoundingBoxStyle() const { return fBoundingBoxStyle; }
 
+	void SetHighlightedShape(int32 shapeIndex);
+	void SetHighlightedPath(int32 shapeIndex, int32 pathIndex);
+	void SetHighlightControlPoints(int32 shapeIndex, int32 pathIndex, bool showBezierHandles = true);
+	void ClearHighlight();
+	HighlightInfo GetHighlightInfo() const { return fHighlightInfo; }
+
 	BRect SVGBounds() const;
 	BRect SVGViewBounds() const;
 	float SVGWidth() const { return fSVGImage ? fSVGImage->width : 0.0f; }
@@ -74,7 +98,7 @@ public:
 	bool  IsLoaded() const { return fSVGImage != NULL; }
 
 protected:
-	void _DrawShape(NSVGshape* shape);
+	void _DrawShape(NSVGshape* shape, int32 shapeIndex);
 	void _ConvertPath(NSVGpath* path, BShape& shape);
 	void _ApplyFillPaint(NSVGpaint* paint, float opacity);
 	void _ApplyStrokePaint(NSVGpaint* paint, float opacity);
@@ -89,6 +113,17 @@ protected:
 	void _DrawSimpleFrame(BRect bounds);
 	void _DrawTransparentGray(BRect bounds);
 
+	// Highlight drawing methods
+	void _DrawHighlight();
+	void _DrawShapeHighlight(NSVGshape* shape);
+	void _DrawPathHighlight(NSVGshape* shape, NSVGpath* path);
+	void _DrawControlPoints(NSVGpath* path);
+	void _DrawBezierHandles(NSVGpath* path);
+	void _DrawControlPoint(BPoint point, bool isEndPoint = false, bool isSelected = false);
+	void _DrawHighlightOutline(NSVGpath* path, float width = 3.0f);
+	BPoint _ConvertSVGPoint(float x, float y) const;
+	float _GetControlPointSize() const;
+
 protected:
 	NSVGimage*            fSVGImage;
 	float                 fScale;
@@ -99,6 +134,7 @@ protected:
 	svg_display_mode      fDisplayMode;
 	bool                  fShowTransparency;
 	svg_boundingbox_style fBoundingBoxStyle;
+	HighlightInfo         fHighlightInfo;
 };
 
 #endif
