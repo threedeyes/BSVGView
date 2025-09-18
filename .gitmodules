@@ -1,0 +1,3 @@
+[submodule "nanosvg"]
+	path = nanosvg
+	url = git@github.com:threedeyes/nanosvg_ext
