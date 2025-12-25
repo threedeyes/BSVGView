@@ -1352,6 +1352,14 @@ BSVGView::_DrawShapeHighlight(NSVGshape* shape)
 
 	for (NSVGpath* path = shape->paths; path != NULL; path = path->next)
 		_DrawHighlightOutline(path, 4.0f);
+
+	if (shape->mask != NULL && shape->mask->shapes != NULL) {
+		for (NSVGshape* maskShape = shape->mask->shapes; maskShape != NULL;
+			 maskShape = maskShape->next) {
+			for (NSVGpath* path = maskShape->paths; path != NULL; path = path->next)
+				_DrawHighlightOutline(path, 4.0f);
+		}
+	}
 }
 
 
