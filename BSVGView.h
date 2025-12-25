@@ -183,6 +183,12 @@ protected:
 								agg::path_storage& aggPath,
 								float offsetX, float offsetY);
 
+	agg::line_cap_e			_ConvertLineCapAGG(int nsvgCap);
+	agg::line_join_e		_ConvertLineJoinAGG(int nsvgJoin);
+	cap_mode				_ConvertLineCapHaiku(int nsvgCap);
+	join_mode				_ConvertLineJoinHaiku(int nsvgJoin);
+	float					_ClampMiterLimit(float miterLimit);
+
 protected:
 	NSVGimage*				fSVGImage;
 	float					fScale;

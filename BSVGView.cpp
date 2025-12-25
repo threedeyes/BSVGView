@@ -454,6 +454,77 @@ BSVGView::_BuildAGGPathWithOffset(NSVGshape* shape, agg::path_storage& aggPath,
 }
 
 
+agg::line_cap_e
+BSVGView::_ConvertLineCapAGG(int nsvgCap)
+{
+	switch (nsvgCap) {
+		case NSVG_CAP_ROUND:
+			return agg::round_cap;
+		case NSVG_CAP_SQUARE:
+			return agg::square_cap;
+		case NSVG_CAP_BUTT:
+		default:
+			return agg::butt_cap;
+	}
+}
+
+
+agg::line_join_e
+BSVGView::_ConvertLineJoinAGG(int nsvgJoin)
+{
+	switch (nsvgJoin) {
+		case NSVG_JOIN_ROUND:
+			return agg::round_join;
+		case NSVG_JOIN_BEVEL:
+			return agg::bevel_join;
+		case NSVG_JOIN_MITER:
+		default:
+			return agg::miter_join;
+	}
+}
+
+
+cap_mode
+BSVGView::_ConvertLineCapHaiku(int nsvgCap)
+{
+	switch (nsvgCap) {
+		case NSVG_CAP_ROUND:
+			return B_ROUND_CAP;
+		case NSVG_CAP_SQUARE:
+			return B_SQUARE_CAP;
+		case NSVG_CAP_BUTT:
+		default:
+			return B_BUTT_CAP;
+	}
+}
+
+
+join_mode
+BSVGView::_ConvertLineJoinHaiku(int nsvgJoin)
+{
+	switch (nsvgJoin) {
+		case NSVG_JOIN_ROUND:
+			return B_ROUND_JOIN;
+		case NSVG_JOIN_BEVEL:
+			return B_BEVEL_JOIN;
+		case NSVG_JOIN_MITER:
+		default:
+			return B_MITER_JOIN;
+	}
+}
+
+
+float
+BSVGView::_ClampMiterLimit(float miterLimit)
+{
+	if (miterLimit < 1.0f)
+		return 1.0f;
+	if (miterLimit > 100.0f)
+		return 100.0f;
+	return miterLimit;
+}
+
+
 BShape*
 BSVGView::_ConvertStrokeToFillShape(NSVGshape* shape)
 {
@@ -475,42 +546,9 @@ BSVGView::_ConvertStrokeToFillShape(NSVGshape* shape)
 		strokeWidth = 0.1f;
 	stroke.width(strokeWidth);
 
-	switch (shape->strokeLineCap) {
-		case NSVG_CAP_BUTT:
-			stroke.line_cap(agg::butt_cap);
-			break;
-		case NSVG_CAP_ROUND:
-			stroke.line_cap(agg::round_cap);
-			break;
-		case NSVG_CAP_SQUARE:
-			stroke.line_cap(agg::square_cap);
-			break;
-		default:
-			stroke.line_cap(agg::butt_cap);
-			break;
-	}
-
-	switch (shape->strokeLineJoin) {
-		case NSVG_JOIN_MITER:
-			stroke.line_join(agg::miter_join);
-			break;
-		case NSVG_JOIN_ROUND:
-			stroke.line_join(agg::round_join);
-			break;
-		case NSVG_JOIN_BEVEL:
-			stroke.line_join(agg::bevel_join);
-			break;
-		default:
-			stroke.line_join(agg::miter_join);
-			break;
-	}
-
-	float miterLimit = shape->miterLimit;
-	if (miterLimit < 1.0f)
-		miterLimit = 1.0f;
-	if (miterLimit > 100.0f)
-		miterLimit = 100.0f;
-	stroke.miter_limit(miterLimit);
+	stroke.line_cap(_ConvertLineCapAGG(shape->strokeLineCap));
+	stroke.line_join(_ConvertLineJoinAGG(shape->strokeLineJoin));
+	stroke.miter_limit(_ClampMiterLimit(shape->miterLimit));
 
 	BShape* result = new BShape();
 	double x, y;
@@ -586,40 +624,9 @@ BSVGView::_StrokeShapeWithRasterizedGradient(NSVGshape* shape, char gradientType
 		strokeWidth = 0.1f;
 	stroke.width(strokeWidth);
 
-	switch (shape->strokeLineCap) {
-		case NSVG_CAP_BUTT:
-			stroke.line_cap(agg::butt_cap);
-			break;
-		case NSVG_CAP_ROUND:
-			stroke.line_cap(agg::round_cap);
-			break;
-		case NSVG_CAP_SQUARE:
-			stroke.line_cap(agg::square_cap);
-			break;
-		default:
-			stroke.line_cap(agg::butt_cap);
-			break;
-	}
-
-	switch (shape->strokeLineJoin) {
-		case NSVG_JOIN_MITER:
-			stroke.line_join(agg::miter_join);
-			break;
-		case NSVG_JOIN_ROUND:
-			stroke.line_join(agg::round_join);
-			break;
-		case NSVG_JOIN_BEVEL:
-			stroke.line_join(agg::bevel_join);
-			break;
-		default:
-			stroke.line_join(agg::miter_join);
-			break;
-	}
-
-	float miterLimit = shape->miterLimit;
-	if (miterLimit < 1.0f)
-		miterLimit = 1.0f;
-	stroke.miter_limit(miterLimit);
+	stroke.line_cap(_ConvertLineCapAGG(shape->strokeLineCap));
+	stroke.line_join(_ConvertLineJoinAGG(shape->strokeLineJoin));
+	stroke.miter_limit(_ClampMiterLimit(shape->miterLimit));
 
 	agg::path_storage strokePath;
 	double x, y;
@@ -867,31 +874,9 @@ BSVGView::_RenderShapeToBuffer(NSVGshape* shape, BBitmap* bitmap, BRect renderBo
 			strokeWidth = 0.1f;
 		stroke.width(strokeWidth);
 
-		switch (shape->strokeLineCap) {
-			case NSVG_CAP_BUTT:
-				stroke.line_cap(agg::butt_cap);
-				break;
-			case NSVG_CAP_ROUND:
-				stroke.line_cap(agg::round_cap);
-				break;
-			case NSVG_CAP_SQUARE:
-				stroke.line_cap(agg::square_cap);
-				break;
-		}
-
-		switch (shape->strokeLineJoin) {
-			case NSVG_JOIN_MITER:
-				stroke.line_join(agg::miter_join);
-				break;
-			case NSVG_JOIN_ROUND:
-				stroke.line_join(agg::round_join);
-				break;
-			case NSVG_JOIN_BEVEL:
-				stroke.line_join(agg::bevel_join);
-				break;
-		}
-
-		stroke.miter_limit(shape->miterLimit > 1.0f ? shape->miterLimit : 4.0f);
+		stroke.line_cap(_ConvertLineCapAGG(shape->strokeLineCap));
+		stroke.line_join(_ConvertLineJoinAGG(shape->strokeLineJoin));
+		stroke.miter_limit(_ClampMiterLimit(shape->miterLimit));
 
 		ras.reset();
 		ras.filling_rule(agg::fill_non_zero);
@@ -1071,32 +1056,9 @@ BSVGView::_RenderMaskToBuffer(NSVGmask* mask, BBitmap* bitmap, BRect renderBound
 				strokeWidth = 0.1f;
 			stroke.width(strokeWidth);
 
-			switch (maskShape->strokeLineCap) {
-				case NSVG_CAP_BUTT:
-					stroke.line_cap(agg::butt_cap);
-					break;
-				case NSVG_CAP_ROUND:
-					stroke.line_cap(agg::round_cap);
-					break;
-				case NSVG_CAP_SQUARE:
-					stroke.line_cap(agg::square_cap);
-					break;
-			}
-
-			switch (maskShape->strokeLineJoin) {
-				case NSVG_JOIN_MITER:
-					stroke.line_join(agg::miter_join);
-					break;
-				case NSVG_JOIN_ROUND:
-					stroke.line_join(agg::round_join);
-					break;
-				case NSVG_JOIN_BEVEL:
-					stroke.line_join(agg::bevel_join);
-					break;
-			}
-
-			stroke.miter_limit(maskShape->miterLimit > 1.0f
-				? maskShape->miterLimit : 4.0f);
+			stroke.line_cap(_ConvertLineCapAGG(maskShape->strokeLineCap));
+			stroke.line_join(_ConvertLineJoinAGG(maskShape->strokeLineJoin));
+			stroke.miter_limit(_ClampMiterLimit(maskShape->miterLimit));
 
 			ras.reset();
 			ras.filling_rule(agg::fill_non_zero);
@@ -2150,46 +2112,9 @@ BSVGView::_SetupStrokeStyle(NSVGshape* shape)
 		scaledWidth = 0.1f;
 	SetPenSize(scaledWidth);
 
-	cap_mode capMode = B_BUTT_CAP;
-	join_mode joinMode = B_MITER_JOIN;
-
-	switch (shape->strokeLineCap) {
-		case NSVG_CAP_BUTT:
-			capMode = B_BUTT_CAP;
-			break;
-		case NSVG_CAP_ROUND:
-			capMode = B_ROUND_CAP;
-			break;
-		case NSVG_CAP_SQUARE:
-			capMode = B_SQUARE_CAP;
-			break;
-		default:
-			capMode = B_BUTT_CAP;
-			break;
-	}
-
-	switch (shape->strokeLineJoin) {
-		case NSVG_JOIN_MITER:
-			joinMode = B_MITER_JOIN;
-			break;
-		case NSVG_JOIN_ROUND:
-			joinMode = B_ROUND_JOIN;
-			break;
-		case NSVG_JOIN_BEVEL:
-			joinMode = B_BEVEL_JOIN;
-			break;
-		default:
-			joinMode = B_MITER_JOIN;
-			break;
-	}
-
-	float miterLimit = shape->miterLimit;
-	if (miterLimit < 1.0f)
-		miterLimit = 1.0f;
-	if (miterLimit > 100.0f)
-		miterLimit = 100.0f;
-
-	SetLineMode(capMode, joinMode, miterLimit);
+	SetLineMode(_ConvertLineCapHaiku(shape->strokeLineCap),
+		_ConvertLineJoinHaiku(shape->strokeLineJoin),
+		_ClampMiterLimit(shape->miterLimit));
 }
 
 
