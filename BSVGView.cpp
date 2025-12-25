@@ -394,31 +394,7 @@ BSVGView::_ApplySpreadMode(int spread, float t)
 void
 BSVGView::_BuildAGGPath(NSVGshape* shape, agg::path_storage& aggPath)
 {
-	if (!shape)
-		return;
-
-	for (NSVGpath* path = shape->paths; path != NULL; path = path->next) {
-		if (path->npts < 2)
-			continue;
-
-		float startX = path->pts[0] * fScale + fOffsetX;
-		float startY = path->pts[1] * fScale + fOffsetY;
-		aggPath.move_to(startX, startY);
-
-		for (int i = 1; i + 2 < path->npts; i += 3) {
-			float c1x = path->pts[i * 2] * fScale + fOffsetX;
-			float c1y = path->pts[i * 2 + 1] * fScale + fOffsetY;
-			float c2x = path->pts[(i + 1) * 2] * fScale + fOffsetX;
-			float c2y = path->pts[(i + 1) * 2 + 1] * fScale + fOffsetY;
-			float endX = path->pts[(i + 2) * 2] * fScale + fOffsetX;
-			float endY = path->pts[(i + 2) * 2 + 1] * fScale + fOffsetY;
-
-			aggPath.curve4(c1x, c1y, c2x, c2y, endX, endY);
-		}
-
-		if (path->closed)
-			aggPath.close_polygon();
-	}
+	_BuildAGGPathWithOffset(shape, aggPath, fOffsetX, fOffsetY);
 }
 
 
