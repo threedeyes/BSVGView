@@ -306,6 +306,9 @@ BSVGView::SetHighlightControlPoints(int32 shapeIndex, int32 pathIndex,
 void
 BSVGView::ClearHighlight()
 {
+	if (fHighlightInfo.mode == SVG_HIGHLIGHT_NONE)
+		return;
+
 	fHighlightInfo.mode = SVG_HIGHLIGHT_NONE;
 	fHighlightInfo.shapeIndex = -1;
 	fHighlightInfo.pathIndex = -1;
