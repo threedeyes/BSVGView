@@ -75,8 +75,6 @@ public:
 							BSVGView(const char* name = "svg_view");
 	virtual					~BSVGView();
 
-	void					_InitDefaults();
-
 	status_t				LoadFromFile(const char* filename,
 								const char* units = "px", float dpi = 96.0f);
 	status_t				LoadFromMemory(const char* data,
@@ -123,6 +121,8 @@ public:
 	bool					IsLoaded() const { return fSVGImage != NULL; }
 
 protected:
+	void					_InitDefaults();
+
 	void					_DrawShape(NSVGshape* shape, int32 shapeIndex);
 	void					_ConvertPath(NSVGpath* path, BShape& shape);
 	void					_SetupGradient(NSVGgradient* gradient, BRect bounds,

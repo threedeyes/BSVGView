@@ -39,20 +39,6 @@ BSVGView::~BSVGView()
 }
 
 
-void
-BSVGView::_InitDefaults()
-{
-	fSVGImage = NULL;
-	fScale = 1.0f;
-	fOffsetX = 0.0f;
-	fOffsetY = 0.0f;
-	fAutoScale = true;
-	fDisplayMode = SVG_DISPLAY_NORMAL;
-	fShowTransparency = true;
-	fBoundingBoxStyle = SVG_BBOX_NONE;
-}
-
-
 status_t
 BSVGView::LoadFromFile(const char* filename, const char* units, float dpi)
 {
@@ -339,6 +325,20 @@ BSVGView::SVGViewBounds() const
 	return BRect(fOffsetX, fOffsetY,
 		fOffsetX + scaledWidth - 1,
 		fOffsetY + scaledHeight - 1);
+}
+
+
+void
+BSVGView::_InitDefaults()
+{
+	fSVGImage = NULL;
+	fScale = 1.0f;
+	fOffsetX = 0.0f;
+	fOffsetY = 0.0f;
+	fAutoScale = true;
+	fDisplayMode = SVG_DISPLAY_NORMAL;
+	fShowTransparency = true;
+	fBoundingBoxStyle = SVG_BBOX_NONE;
 }
 
 
