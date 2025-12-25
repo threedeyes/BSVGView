@@ -75,6 +75,8 @@ public:
 							BSVGView(const char* name = "svg_view");
 	virtual					~BSVGView();
 
+	void					_InitDefaults();
+
 	status_t				LoadFromFile(const char* filename,
 								const char* units = "px", float dpi = 96.0f);
 	status_t				LoadFromMemory(const char* data,

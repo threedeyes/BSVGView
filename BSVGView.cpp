@@ -19,37 +19,37 @@ static const int32 kMaxMaskDimension = 2048;
 
 BSVGView::BSVGView(BRect frame, const char* name, uint32 resizeMask, uint32 flags)
 	:
-	BView(frame, name, resizeMask, flags),
-	fSVGImage(NULL),
-	fScale(1.0f),
-	fOffsetX(0.0f),
-	fOffsetY(0.0f),
-	fAutoScale(true),
-	fDisplayMode(SVG_DISPLAY_NORMAL),
-	fShowTransparency(true),
-	fBoundingBoxStyle(SVG_BBOX_NONE)
+	BView(frame, name, resizeMask, flags)
 {
+	_InitDefaults();
 }
 
 
 BSVGView::BSVGView(const char* name)
 	:
-	BView(name, B_WILL_DRAW | B_FRAME_EVENTS),
-	fSVGImage(NULL),
-	fScale(1.0f),
-	fOffsetX(0.0f),
-	fOffsetY(0.0f),
-	fAutoScale(true),
-	fDisplayMode(SVG_DISPLAY_NORMAL),
-	fShowTransparency(true),
-	fBoundingBoxStyle(SVG_BBOX_NONE)
+	BView(name, B_WILL_DRAW | B_FRAME_EVENTS)
 {
+	_InitDefaults();
 }
 
 
 BSVGView::~BSVGView()
 {
 	Unload();
+}
+
+
+void
+BSVGView::_InitDefaults()
+{
+	fSVGImage = NULL;
+	fScale = 1.0f;
+	fOffsetX = 0.0f;
+	fOffsetY = 0.0f;
+	fAutoScale = true;
+	fDisplayMode = SVG_DISPLAY_NORMAL;
+	fShowTransparency = true;
+	fBoundingBoxStyle = SVG_BBOX_NONE;
 }
 
 
