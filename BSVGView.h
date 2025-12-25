@@ -165,6 +165,10 @@ protected:
 								float t, float opacity);
 	void					_BuildGradientLUT(NSVGgradient* gradient,
 								float opacity, GradientLUT& lut);
+	void					_ApplyGradientToBuffer(uint8* bits, int width,
+								int height, int32 bpr, NSVGgradient* gradient,
+								char gradientType, BRect renderBounds,
+								float opacity);
 	float					_ApplySpreadMode(int spread, float t);
 
 	BShape*					_ConvertStrokeToFillShape(NSVGshape* shape);

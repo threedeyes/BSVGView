@@ -354,6 +354,58 @@ BSVGView::_BuildGradientLUT(NSVGgradient* gradient, float opacity, GradientLUT& 
 }
 
 
+void
+BSVGView::_ApplyGradientToBuffer(uint8* bits, int width, int height, int32 bpr,
+	NSVGgradient* gradient, char gradientType, BRect renderBounds, float opacity)
+{
+	if (!bits || !gradient)
+		return;
+
+	GradientLUT lut;
+	_BuildGradientLUT(gradient, opacity, lut);
+
+	float* m = gradient->xform;
+	float invScale = 1.0f / fScale;
+
+	for (int py = 0; py < height; py++) {
+		uint8* row = bits + py * bpr;
+		for (int px = 0; px < width; px++) {
+			uint8 alpha = row[px * 4 + 3];
+			if (alpha == 0)
+				continue;
+
+			float viewX = renderBounds.left + px;
+			float viewY = renderBounds.top + py;
+			float svgX = (viewX - fOffsetX) * invScale;
+			float svgY = (viewY - fOffsetY) * invScale;
+
+			float gx = m[0] * svgX + m[2] * svgY + m[4];
+			float gy = m[1] * svgX + m[3] * svgY + m[5];
+
+			float t;
+			if (gradientType == NSVG_PAINT_LINEAR_GRADIENT) {
+				t = gy;
+			} else {
+				t = sqrtf(gx * gx + gy * gy);
+			}
+
+			t = _ApplySpreadMode(gradient->spread, t);
+
+			int idx = (int)(t * 255.0f + 0.5f);
+			if (idx < 0) idx = 0;
+			if (idx > 255) idx = 255;
+
+			rgb_color c = lut.colors[idx];
+
+			row[px * 4 + 0] = c.blue;
+			row[px * 4 + 1] = c.green;
+			row[px * 4 + 2] = c.red;
+			row[px * 4 + 3] = (uint8)(((uint16)c.alpha * alpha) / 255);
+		}
+	}
+}
+
+
 float
 BSVGView::_ApplySpreadMode(int spread, float t)
 {
@@ -690,49 +742,25 @@ BSVGView::_StrokeShapeWithRasterizedGradient(NSVGshape* shape, char gradientType
 	ren.color(agg::rgba8(255, 255, 255, 255));
 	agg::render_scanlines(ras, sl, ren);
 
-	GradientLUT lut;
-	_BuildGradientLUT(gradient, shape->opacity, lut);
+	if (downsample > 1.0f) {
+		float savedScale = fScale;
+		float savedOffsetX = fOffsetX;
+		float savedOffsetY = fOffsetY;
 
-	float* m = gradient->xform;
-	float invScale = 1.0f / fScale;
+		fScale = fScale / downsample;
+		fOffsetX = (fOffsetX - totalBounds.left) / downsample;
+		fOffsetY = (fOffsetY - totalBounds.top) / downsample;
 
-	for (int py = 0; py < height; py++) {
-		uint8* row = bits + py * bpr;
-		for (int px = 0; px < width; px++) {
-			uint8 alpha = row[px * 4 + 3];
+		BRect localBounds(0, 0, width - 1, height - 1);
+		_ApplyGradientToBuffer(bits, width, height, bpr, gradient,
+			gradientType, localBounds, shape->opacity);
 
-			if (alpha == 0)
-				continue;
-
-			float viewX = totalBounds.left + px * downsample;
-			float viewY = totalBounds.top + py * downsample;
-			float svgX = (viewX - fOffsetX) * invScale;
-			float svgY = (viewY - fOffsetY) * invScale;
-
-			float gx = m[0] * svgX + m[2] * svgY + m[4];
-			float gy = m[1] * svgX + m[3] * svgY + m[5];
-
-			float t;
-			if (gradientType == NSVG_PAINT_LINEAR_GRADIENT) {
-				t = gy;
-			} else {
-				t = sqrtf(gx * gx + gy * gy);
-			}
-
-			t = _ApplySpreadMode(gradient->spread, t);
-
-			int idx = (int)(t * 255.0f + 0.5f);
-			if (idx < 0) idx = 0;
-			if (idx > 255) idx = 255;
-
-			rgb_color c = lut.colors[idx];
-			uint8 finalAlpha = (uint8)(((uint16)c.alpha * alpha) / 255);
-
-			row[px * 4 + 0] = c.blue;
-			row[px * 4 + 1] = c.green;
-			row[px * 4 + 2] = c.red;
-			row[px * 4 + 3] = finalAlpha;
-		}
+		fScale = savedScale;
+		fOffsetX = savedOffsetX;
+		fOffsetY = savedOffsetY;
+	} else {
+		_ApplyGradientToBuffer(bits, width, height, bpr, gradient,
+			gradientType, totalBounds, shape->opacity);
 	}
 
 	SetDrawingMode(B_OP_ALPHA);
@@ -795,49 +823,9 @@ BSVGView::_RenderShapeToBuffer(NSVGshape* shape, BBitmap* bitmap, BRect renderBo
 			ren.color(agg::rgba8(255, 255, 255, 255));
 			agg::render_scanlines(ras, sl, ren);
 
-			NSVGgradient* gradient = shape->fill.gradient;
-			GradientLUT lut;
-			_BuildGradientLUT(gradient, shape->opacity, lut);
-
-			float* m = gradient->xform;
-			float invScale = 1.0f / fScale;
-
-			for (int py = 0; py < height; py++) {
-				uint8* row = bits + py * bpr;
-				for (int px = 0; px < width; px++) {
-					uint8 alpha = row[px * 4 + 3];
-					if (alpha == 0)
-						continue;
-
-					float viewX = renderBounds.left + px;
-					float viewY = renderBounds.top + py;
-					float svgX = (viewX - fOffsetX) * invScale;
-					float svgY = (viewY - fOffsetY) * invScale;
-
-					float gx = m[0] * svgX + m[2] * svgY + m[4];
-					float gy = m[1] * svgX + m[3] * svgY + m[5];
-
-					float t;
-					if (shape->fill.type == NSVG_PAINT_LINEAR_GRADIENT) {
-						t = gy;
-					} else {
-						t = sqrtf(gx * gx + gy * gy);
-					}
-
-					t = _ApplySpreadMode(gradient->spread, t);
-
-					int idx = (int)(t * 255.0f + 0.5f);
-					if (idx < 0) idx = 0;
-					if (idx > 255) idx = 255;
-
-					rgb_color c = lut.colors[idx];
-
-					row[px * 4 + 0] = c.blue;
-					row[px * 4 + 1] = c.green;
-					row[px * 4 + 2] = c.red;
-					row[px * 4 + 3] = (uint8)(((uint16)c.alpha * alpha) / 255);
-				}
-			}
+			_ApplyGradientToBuffer(bits, width, height, bpr,
+				shape->fill.gradient, shape->fill.type, renderBounds,
+				shape->opacity);
 		}
 	}
 
@@ -868,49 +856,9 @@ BSVGView::_RenderShapeToBuffer(NSVGshape* shape, BBitmap* bitmap, BRect renderBo
 			ren.color(agg::rgba8(255, 255, 255, 255));
 			agg::render_scanlines(ras, sl, ren);
 
-			NSVGgradient* gradient = shape->stroke.gradient;
-			GradientLUT lut;
-			_BuildGradientLUT(gradient, shape->opacity, lut);
-
-			float* m = gradient->xform;
-			float invScale = 1.0f / fScale;
-
-			for (int py = 0; py < height; py++) {
-				uint8* row = bits + py * bpr;
-				for (int px = 0; px < width; px++) {
-					uint8 alpha = row[px * 4 + 3];
-					if (alpha == 0)
-						continue;
-
-					float viewX = renderBounds.left + px;
-					float viewY = renderBounds.top + py;
-					float svgX = (viewX - fOffsetX) * invScale;
-					float svgY = (viewY - fOffsetY) * invScale;
-
-					float gx = m[0] * svgX + m[2] * svgY + m[4];
-					float gy = m[1] * svgX + m[3] * svgY + m[5];
-
-					float t;
-					if (shape->stroke.type == NSVG_PAINT_LINEAR_GRADIENT) {
-						t = gy;
-					} else {
-						t = sqrtf(gx * gx + gy * gy);
-					}
-
-					t = _ApplySpreadMode(gradient->spread, t);
-
-					int idx = (int)(t * 255.0f + 0.5f);
-					if (idx < 0) idx = 0;
-					if (idx > 255) idx = 255;
-
-					rgb_color c = lut.colors[idx];
-
-					row[px * 4 + 0] = c.blue;
-					row[px * 4 + 1] = c.green;
-					row[px * 4 + 2] = c.red;
-					row[px * 4 + 3] = (uint8)(((uint16)c.alpha * alpha) / 255);
-				}
-			}
+			_ApplyGradientToBuffer(bits, width, height, bpr,
+				shape->stroke.gradient, shape->stroke.type, renderBounds,
+				shape->opacity);
 		}
 	}
 }
@@ -976,49 +924,9 @@ BSVGView::_RenderMaskToBuffer(NSVGmask* mask, BBitmap* bitmap, BRect renderBound
 				ren.color(agg::rgba8(255, 255, 255, 255));
 				agg::render_scanlines(ras, sl, ren);
 
-				NSVGgradient* gradient = maskShape->fill.gradient;
-				GradientLUT lut;
-				_BuildGradientLUT(gradient, maskShape->opacity, lut);
-
-				float* m = gradient->xform;
-				float invScale = 1.0f / fScale;
-
-				for (int py = 0; py < height; py++) {
-					uint8* row = bits + py * bpr;
-					for (int px = 0; px < width; px++) {
-						uint8 alpha = row[px * 4 + 3];
-						if (alpha == 0)
-							continue;
-
-						float viewX = renderBounds.left + px;
-						float viewY = renderBounds.top + py;
-						float svgX = (viewX - fOffsetX) * invScale;
-						float svgY = (viewY - fOffsetY) * invScale;
-
-						float gx = m[0] * svgX + m[2] * svgY + m[4];
-						float gy = m[1] * svgX + m[3] * svgY + m[5];
-
-						float t;
-						if (maskShape->fill.type == NSVG_PAINT_LINEAR_GRADIENT) {
-							t = gy;
-						} else {
-							t = sqrtf(gx * gx + gy * gy);
-						}
-
-						t = _ApplySpreadMode(gradient->spread, t);
-
-						int idx = (int)(t * 255.0f + 0.5f);
-						if (idx < 0) idx = 0;
-						if (idx > 255) idx = 255;
-
-						rgb_color c = lut.colors[idx];
-
-						row[px * 4 + 0] = c.blue;
-						row[px * 4 + 1] = c.green;
-						row[px * 4 + 2] = c.red;
-						row[px * 4 + 3] = (uint8)(((uint16)c.alpha * alpha) / 255);
-					}
-				}
+				_ApplyGradientToBuffer(bits, width, height, bpr,
+					maskShape->fill.gradient, maskShape->fill.type,
+					renderBounds, maskShape->opacity);
 			}
 		}
 
