@@ -1541,58 +1541,6 @@ BSVGView::_ConvertPath(NSVGpath* path, BShape& shape)
 }
 
 
-void
-BSVGView::_ApplyFillPaint(NSVGpaint* paint, float opacity)
-{
-	if (!paint)
-		return;
-
-	switch (paint->type) {
-		case NSVG_PAINT_COLOR:
-		{
-			rgb_color color = _ConvertColor(paint->color, opacity);
-			SetHighColor(color);
-			break;
-		}
-
-		default:
-			break;
-	}
-}
-
-
-void
-BSVGView::_ApplyStrokePaint(NSVGpaint* paint, float opacity)
-{
-	if (!paint)
-		return;
-
-	switch (paint->type) {
-		case NSVG_PAINT_COLOR:
-		{
-			rgb_color color = _ConvertColor(paint->color, opacity);
-			SetHighColor(color);
-			break;
-		}
-
-		case NSVG_PAINT_LINEAR_GRADIENT:
-		case NSVG_PAINT_RADIAL_GRADIENT:
-		{
-			if (paint->gradient && paint->gradient->nstops > 0) {
-				rgb_color color = _ConvertColor(
-					paint->gradient->stops[0].color, opacity);
-				SetHighColor(color);
-			}
-			break;
-		}
-
-		default:
-			SetHighColor(ui_color(B_PANEL_TEXT_COLOR));
-			break;
-	}
-}
-
-
 bool
 BSVGView::_IsUniformScale(float* xform)
 {
@@ -1772,66 +1720,6 @@ BSVGView::_InterpolateGradientColor(NSVGgradient* gradient, float t, float opaci
 	result.alpha = (uint8)(interpolatedAlpha * opacity * 255.0f);
 
 	return result;
-}
-
-
-rgb_color
-BSVGView::_SampleGradientAt(NSVGgradient* gradient, char gradientType,
-	float svgX, float svgY, float opacity)
-{
-	if (!gradient)
-		return (rgb_color){0, 0, 0, 0};
-
-	float* m = gradient->xform;
-
-	float gx = m[0] * svgX + m[2] * svgY + m[4];
-	float gy = m[1] * svgX + m[3] * svgY + m[5];
-
-	float t;
-
-	if (gradientType == NSVG_PAINT_LINEAR_GRADIENT) {
-		t = gy;
-	} else {
-		float fx = gradient->fx;
-		float fy = gradient->fy;
-
-		float focalDist = sqrtf(fx * fx + fy * fy);
-
-		if (focalDist < 0.001f) {
-			t = sqrtf(gx * gx + gy * gy);
-		} else {
-			float angle = atan2f(gy, gx);
-			float cosA = cosf(angle);
-			float sinA = sinf(angle);
-
-			float a = 1.0f;
-			float b = -2.0f * (fx * cosA + fy * sinA);
-			float c = fx * fx + fy * fy - 1.0f;
-			float discriminant = b * b - 4.0f * a * c;
-
-			if (discriminant >= 0) {
-				float sqrtD = sqrtf(discriminant);
-				float t1 = (-b + sqrtD) / (2.0f * a);
-				float t2 = (-b - sqrtD) / (2.0f * a);
-				float edgeDist = (t1 > 0) ? t1 : t2;
-
-				float focalToPoint = sqrtf((gx - fx) * (gx - fx)
-					+ (gy - fy) * (gy - fy));
-				float focalToEdgeX = edgeDist * cosA - fx;
-				float focalToEdgeY = edgeDist * sinA - fy;
-				float focalToEdge = sqrtf(focalToEdgeX * focalToEdgeX
-					+ focalToEdgeY * focalToEdgeY);
-
-				t = (focalToEdge > 0.001f) ? focalToPoint / focalToEdge : 0.0f;
-			} else {
-				t = sqrtf(gx * gx + gy * gy);
-			}
-		}
-	}
-
-	t = _ApplySpreadMode(gradient->spread, t);
-
-	return _InterpolateGradientColor(gradient, t, opacity);
 }
 
 

@@ -125,8 +125,6 @@ public:
 protected:
 	void					_DrawShape(NSVGshape* shape, int32 shapeIndex);
 	void					_ConvertPath(NSVGpath* path, BShape& shape);
-	void					_ApplyFillPaint(NSVGpaint* paint, float opacity);
-	void					_ApplyStrokePaint(NSVGpaint* paint, float opacity);
 	void					_SetupGradient(NSVGgradient* gradient, BRect bounds,
 								char gradientType, BGradient** outGradient,
 								float shapeOpacity = 1.0f);
@@ -160,9 +158,6 @@ protected:
 	void					_FillShapeWithGradientBitmap(BShape& shape,
 								BBitmap* bitmap, BRect shapeBounds,
 								BRect clippedBounds);
-	rgb_color				_SampleGradientAt(NSVGgradient* gradient,
-								char gradientType, float svgX, float svgY,
-								float opacity);
 	rgb_color				_InterpolateGradientColor(NSVGgradient* gradient,
 								float t, float opacity);
 	void					_BuildGradientLUT(NSVGgradient* gradient,
